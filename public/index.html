@@ -3,61 +3,83 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ระบบบริหารกระแสเงินสด — ประตูไม้</title>
+<title>WAYTHAI-FORYOU — ระบบบริหารกระแสเงินสด</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#0f1720; --panel:#16212e; --panel2:#1d2b3a; --line:#27384a;
-    --text:#e8eef5; --muted:#90a4b8; --accent:#3b82f6;
-    --green:#22c55e; --yellow:#eab308; --red:#ef4444;
+    --bg:#f4f1e9;            /* ครีมอบอุ่น สีกระดาษ/ไม้อ่อน */
+    --bg-grad:radial-gradient(1100px 560px at 82% -12%, #ece5d5 0%, #f4f1e9 55%);
+    --panel:#fffdf9;         /* ขาวนวล */
+    --panel2:#efe9db;        /* เบจอ่อน (อินพุต) */
+    --line:#e3dbca;          /* เส้นขอบอุ่น */
+    --text:#283129;          /* เขียวถ่านเข้ม (ตัวอักษร) */
+    --muted:#8a8473;         /* น้ำตาลเทา */
+    --accent:#2f6b4c;        /* เขียวป่า (สีหลัก) */
+    --accent-d:#214f37;      /* เขียวเข้ม */
+    --wood:#9a6a43;          /* น้ำตาลไม้ */
+    --wood-d:#6f4a2e;        /* วอลนัท */
+    --gold:#b8922f;          /* ทอง (หรูหรา) */
+    --green:#2f8f5b; --yellow:#bd8b00; --red:#b4502f;
+    --shadow:0 1px 2px rgba(60,45,20,.05), 0 10px 30px rgba(60,45,20,.06);
     --font:'Sarabun','Segoe UI',system-ui,sans-serif;
+    --serif:'Playfair Display','Sarabun',serif;
   }
   *{box-sizing:border-box}
-  body{margin:0;font-family:var(--font);background:var(--bg);color:var(--text);font-size:15px}
-  header{background:var(--panel);border-bottom:1px solid var(--line);padding:12px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:10}
-  header h1{font-size:18px;margin:0;font-weight:700}
-  header .sub{color:var(--muted);font-size:13px}
+  body{margin:0;font-family:var(--font);background:var(--bg);background-image:var(--bg-grad);background-attachment:fixed;color:var(--text);font-size:15px}
+  header{background:linear-gradient(135deg,#1f482e 0%,#2f6b4c 55%,#357050 100%);border-bottom:3px solid var(--gold);padding:14px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:10;box-shadow:0 4px 18px rgba(25,45,30,.22);color:#f3efe2}
+  header h1{font-size:20px;margin:0;font-weight:700;color:#fff;letter-spacing:.3px}
+  header .sub{color:#cfe1cf;font-size:12.5px;letter-spacing:.2px}
+  header .muted{color:#bcd2bd !important}
   .spacer{flex:1}
   .ctrl{display:flex;align-items:center;gap:8px}
-  input[type=date]{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:6px 8px;border-radius:6px;font-family:var(--font)}
-  .toggle{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:8px;overflow:hidden}
-  .toggle button{background:none;border:none;color:var(--muted);padding:6px 14px;cursor:pointer;font-family:var(--font);font-size:14px}
-  .toggle button.active{background:var(--accent);color:#fff;font-weight:600}
-  nav{display:flex;gap:4px;padding:10px 20px;background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto;flex-wrap:wrap}
-  nav button{background:var(--panel2);border:1px solid var(--line);color:var(--muted);padding:8px 14px;border-radius:8px;cursor:pointer;font-family:var(--font);font-size:14px;white-space:nowrap}
-  nav button.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+  input[type=date]{background:rgba(255,255,255,.92);border:1px solid rgba(255,255,255,.5);color:#283129;padding:6px 8px;border-radius:8px;font-family:var(--font)}
+  .toggle{display:flex;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.34);border-radius:9px;overflow:hidden}
+  .toggle button{background:none;border:none;color:#e6efe6;padding:6px 14px;cursor:pointer;font-family:var(--font);font-size:14px}
+  .toggle button.active{background:var(--gold);color:#2a2410;font-weight:700}
+  nav{display:flex;gap:6px;padding:12px 20px;background:rgba(255,253,249,.85);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);overflow-x:auto;flex-wrap:wrap}
+  nav button{background:var(--panel);border:1px solid var(--line);color:var(--muted);padding:8px 15px;border-radius:9px;cursor:pointer;font-family:var(--font);font-size:14px;white-space:nowrap;transition:all .15s}
+  nav button:hover{border-color:var(--accent);color:var(--accent)}
+  nav button.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;box-shadow:0 2px 8px rgba(47,107,76,.3)}
   nav button.adv{border-style:dashed}
-  main{padding:20px;max-width:1280px;margin:0 auto}
+  main{padding:22px;max-width:1280px;margin:0 auto}
   .grid{display:grid;gap:14px}
   .cards{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow);position:relative;overflow:hidden;transition:transform .15s,box-shadow .15s}
+  .card::after{content:'';position:absolute;left:0;top:0;height:100%;width:3px;background:linear-gradient(var(--accent),var(--gold))}
+  .card:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(60,45,20,.1),0 16px 38px rgba(60,45,20,.08)}
   .card h3{margin:0 0 4px;font-size:13px;color:var(--muted);font-weight:500;display:flex;align-items:center;gap:6px}
-  .card .big{font-size:26px;font-weight:700;margin:4px 0}
+  .card .big{font-size:27px;font-weight:700;margin:4px 0;font-family:var(--serif);color:var(--text);letter-spacing:.3px}
   .card .note{font-size:12px;color:var(--muted)}
   .badge{display:inline-block;width:10px;height:10px;border-radius:50%}
   .bdot-green{background:var(--green)} .bdot-yellow{background:var(--yellow)} .bdot-red{background:var(--red)}
-  .pill{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600}
-  .pill-green{background:rgba(34,197,94,.15);color:var(--green)}
-  .pill-yellow{background:rgba(234,179,8,.15);color:var(--yellow)}
-  .pill-red{background:rgba(239,68,68,.15);color:var(--red)}
+  .pill{font-size:11px;padding:2px 9px;border-radius:20px;font-weight:600}
+  .pill-green{background:rgba(47,143,91,.14);color:#256e46}
+  .pill-yellow{background:rgba(189,139,0,.16);color:#8a6500}
+  .pill-red{background:rgba(180,80,47,.14);color:#9a3f22}
   .tip{position:relative;cursor:help;color:var(--muted);border:1px solid var(--line);border-radius:50%;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:11px}
-  .tip:hover::after{content:attr(data-tip);position:absolute;left:0;top:22px;width:260px;background:#0a1119;border:1px solid var(--line);padding:10px;border-radius:8px;font-size:12px;color:var(--text);z-index:20;font-weight:400;line-height:1.5;white-space:normal}
+  .tip:hover::after{content:attr(data-tip);position:absolute;left:0;top:22px;width:260px;background:#23492f;border:1px solid var(--gold);padding:11px;border-radius:10px;font-size:12px;color:#f1efe4;z-index:20;font-weight:400;line-height:1.55;white-space:normal;box-shadow:0 8px 24px rgba(30,45,30,.25)}
   table{width:100%;border-collapse:collapse;font-size:13px}
-  th,td{text-align:right;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th,td{text-align:right;padding:9px 10px;border-bottom:1px solid var(--line)}
   th:first-child,td:first-child{text-align:left}
-  th{color:var(--muted);font-weight:500}
-  .section{margin-bottom:26px}
-  .section h2{font-size:17px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+  th{color:var(--wood-d);font-weight:600;font-size:12px}
+  tbody tr:hover{background:rgba(47,107,76,.045)}
+  .section{margin-bottom:28px}
+  .section h2{font-size:18px;margin:0 0 14px;padding-bottom:9px;border-bottom:2px solid var(--line);display:flex;align-items:center;gap:8px;font-weight:700;color:var(--accent-d)}
+  .section h2::before{content:'';width:4px;height:18px;background:linear-gradient(var(--accent),var(--gold));border-radius:3px;display:inline-block}
   .muted{color:var(--muted)}
-  .chartbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;height:320px}
+  .chartbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;height:320px;box-shadow:var(--shadow)}
   .hidden{display:none}
   .row{display:flex;gap:14px;flex-wrap:wrap}
   .row>*{flex:1;min-width:280px}
-  .alert{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px;margin-bottom:10px}
+  .alert{background:rgba(180,80,47,.08);border:1px solid rgba(180,80,47,.3);border-radius:12px;padding:13px;margin-bottom:10px;color:#7e3a20}
   .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
   .form-grid label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
-  .form-grid input,.form-grid select{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:7px;border-radius:6px;font-family:var(--font)}
-  button.primary{background:var(--accent);color:#fff;border:none;padding:9px 18px;border-radius:8px;cursor:pointer;font-family:var(--font);font-weight:600}
+  .form-grid input,.form-grid select{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:8px;border-radius:8px;font-family:var(--font)}
+  button.primary{background:linear-gradient(135deg,var(--accent),var(--accent-d));color:#fff;border:none;padding:10px 20px;border-radius:9px;cursor:pointer;font-family:var(--font);font-weight:600;box-shadow:0 3px 10px rgba(47,107,76,.25)}
+  button.primary:hover{filter:brightness(1.07)}
   .loading{color:var(--muted);padding:40px;text-align:center}
   .scenario-leg{display:flex;gap:16px;font-size:13px;margin-bottom:8px}
   .scenario-leg span{display:flex;align-items:center;gap:6px}
@@ -67,9 +89,9 @@
 <body>
 <div id="loginScreen" style="position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;align-items:center;justify-content:center">
   <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:36px;width:340px;max-width:90%">
-    <div style="text-align:center;font-size:34px">🚪</div>
-    <h2 style="text-align:center;margin:6px 0 2px">ระบบบริหารกระแสเงินสด</h2>
-    <p style="text-align:center;color:var(--muted);font-size:13px;margin:0 0 20px">เข้าสู่ระบบเพื่อใช้งาน</p>
+    <div style="text-align:center"><img src="https://cdn.phototourl.com/free/2026-06-04-4bf268f0-68d4-4ac1-9558-6fe8362f128c.jpg" alt="WAYTHAI-FORYOU" onerror="this.style.display='none'" style="height:76px;width:76px;border-radius:18px;object-fit:cover;box-shadow:0 6px 18px rgba(47,107,76,.28)"></div>
+    <h2 style="text-align:center;margin:12px 0 0;font-family:var(--serif);letter-spacing:.5px;color:var(--accent-d)">WAYTHAI-FORYOU</h2>
+    <p style="text-align:center;color:var(--muted);font-size:13px;margin:4px 0 20px">ระบบบริหารกระแสเงินสด — เข้าสู่ระบบ</p>
     <div class="form-grid" style="grid-template-columns:1fr">
       <label>ชื่อผู้ใช้<input id="loginUser" type="text" value="admin" /></label>
       <label>รหัสผ่าน<input id="loginPass" type="password" value="" placeholder="admin" /></label>
@@ -79,9 +101,10 @@
   </div>
 </div>
 <header>
+  <img src="https://cdn.phototourl.com/free/2026-06-04-4bf268f0-68d4-4ac1-9558-6fe8362f128c.jpg" alt="WAYTHAI-FORYOU" onerror="this.style.display='none'" style="height:44px;width:44px;border-radius:10px;object-fit:cover;border:1px solid rgba(255,255,255,.35);box-shadow:0 2px 8px rgba(0,0,0,.2)">
   <div>
-    <h1>🚪 ระบบบริหารกระแสเงินสด</h1>
-    <div class="sub">ธุรกิจรับจ้างผลิตประตูไม้ · THB</div>
+    <h1 style="font-family:var(--serif);letter-spacing:.6px">WAYTHAI-FORYOU</h1>
+    <div class="sub">ระบบบริหารกระแสเงินสด · รับจ้างผลิตประตูไม้ · THB</div>
   </div>
   <div class="spacer"></div>
   <div class="ctrl">
@@ -92,7 +115,7 @@
     <button data-mode="basic" class="active">พื้นฐาน</button>
     <button data-mode="advanced">ขั้นสูง</button>
   </div>
-  <button id="logoutBtn" style="background:var(--panel2);border:1px solid var(--line);color:var(--muted);padding:6px 12px;border-radius:8px;cursor:pointer;font-family:var(--font)">ออกจากระบบ</button>
+  <button id="logoutBtn" style="background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.34);color:#eef5ee;padding:6px 12px;border-radius:8px;cursor:pointer;font-family:var(--font)">ออกจากระบบ</button>
 </header>
 
 <nav id="nav"></nav>
@@ -198,7 +221,7 @@ async function tabOverview(){
   `);
   mkChart('ovPaint',{type:'line',data:{labels:p.trend.map(t=>t.month),datasets:[{label:'ค่าสีต่อเดือน (บาท)',data:p.trend.map(t=>t.paint_satang/100),borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.1)',fill:true,tension:.3}]},options:chartOpts('แนวโน้มต้นทุนค่าสี')});
   const e = d.expense_to_sales.rows.slice(0,6);
-  mkChart('ovExp',{type:'bar',data:{labels:e.map(x=>catTH(x.category)),datasets:[{label:'% ของยอดขาย',data:e.map(x=>x.pct_of_sales),backgroundColor:'#3b82f6'}]},options:chartOpts('ค่าใช้จ่ายต่อยอดขาย (รายหมวด)')});
+  mkChart('ovExp',{type:'bar',data:{labels:e.map(x=>catTH(x.category)),datasets:[{label:'% ของยอดขาย',data:e.map(x=>x.pct_of_sales),backgroundColor:'#2f6b4c'}]},options:chartOpts('ค่าใช้จ่ายต่อยอดขาย (รายหมวด)')});
 }
 
 async function tabCash(){
@@ -346,10 +369,10 @@ async function tabPayroll(){
   `);
   const t=d.all_time.trend;
   mkChart('payTrend',{type:'bar',data:{labels:t.map(x=>x.month),datasets:[
-    {label:'ค่าจ้างรวม',data:t.map(x=>x.gross/100),backgroundColor:'#3b82f6'},
+    {label:'ค่าจ้างรวม',data:t.map(x=>x.gross/100),backgroundColor:'#2f6b4c'},
     {label:'OT',data:t.map(x=>x.ot/100),backgroundColor:'#eab308'}
   ]},options:chartOpts('แนวโน้มค่าจ้าง + OT รายเดือน')});
-  mkChart('paySplit',{type:'doughnut',data:{labels:['ประจำ','พาร์ทไทม์'],datasets:[{data:[s.ft_gross_satang/100,s.pt_gross_satang/100],backgroundColor:['#3b82f6','#22c55e']}]},options:chartOpts('สัดส่วนค่าจ้าง ประจำ vs พาร์ทไทม์')});
+  mkChart('paySplit',{type:'doughnut',data:{labels:['ประจำ','พาร์ทไทม์'],datasets:[{data:[s.ft_gross_satang/100,s.pt_gross_satang/100],backgroundColor:['#2f6b4c','#9a6a43']}]},options:chartOpts('สัดส่วนค่าจ้าง ประจำ vs พาร์ทไทม์')});
 }
 
 async function tabBudget(){
@@ -376,7 +399,7 @@ async function tabForecast(){
     </div>
     <div class="section"><h2>พยากรณ์ระยะยาว 18 เดือน — รอดหรือล่มจม? ${tip('ฉาย 3 ฉากทัศน์จากกระแสเงินสดเฉลี่ย')}</h2>
       <div class="scenario-leg">
-        <span><i class="swatch" style="background:#3b82f6"></i>Base (ปัจจุบัน)</span>
+        <span><i class="swatch" style="background:#9a6a43"></i>Base (ปัจจุบัน)</span>
         <span><i class="swatch" style="background:#22c55e"></i>ดีขึ้น (เก็บเร็ว/คุมต้นทุน)</span>
         <span><i class="swatch" style="background:#ef4444"></i>แย่ลง (เก็บช้า/ต้นทุนพุ่ง)</span>
       </div>
@@ -391,10 +414,10 @@ async function tabForecast(){
   mkChart('fc13',{type:'bar',data:{labels:w.weeks.map(x=>'W'+x.week),datasets:[
     {label:'รับเข้า',data:w.weeks.map(x=>x.inflow_satang/100),backgroundColor:'#22c55e',stack:'f'},
     {label:'จ่ายออก',data:w.weeks.map(x=>-x.outflow_satang/100),backgroundColor:'#ef4444',stack:'f'},
-    {type:'line',label:'เงินสดคงเหลือ',data:w.weeks.map(x=>x.balance_satang/100),borderColor:'#3b82f6',backgroundColor:'#3b82f6',tension:.2,yAxisID:'y'}
+    {type:'line',label:'เงินสดคงเหลือ',data:w.weeks.map(x=>x.balance_satang/100),borderColor:'#2f6b4c',backgroundColor:'#2f6b4c',tension:.2,yAxisID:'y'}
   ]},options:chartOpts('กระแสเงินสดรายสัปดาห์ + ยอดคงเหลือ')});
   mkChart('fcLong',{type:'line',data:{labels:lr.base.series.map(x=>x.month),datasets:[
-    {label:'Base',data:lr.base.series.map(x=>x.balance_satang/100),borderColor:'#3b82f6',tension:.2},
+    {label:'Base',data:lr.base.series.map(x=>x.balance_satang/100),borderColor:'#9a6a43',tension:.2},
     {label:'ดีขึ้น',data:lr.optimistic.series.map(x=>x.balance_satang/100),borderColor:'#22c55e',tension:.2},
     {label:'แย่ลง',data:lr.pessimistic.series.map(x=>x.balance_satang/100),borderColor:'#ef4444',tension:.2}
   ]},options:chartOpts('แนวโน้มเงินสด 18 เดือน (เส้น 0 = เงินหมด)')});
@@ -413,7 +436,7 @@ async function tabCCC(){
     </div>
     <div class="chartbox"><canvas id="cccChart"></canvas></div>
   `);
-  mkChart('cccChart',{type:'bar',data:{labels:['DSO','DIO','DPO','= CCC'],datasets:[{label:'วัน',data:[c.dso,c.dio,-c.dpo,c.ccc],backgroundColor:['#3b82f6','#eab308','#22c55e','#a855f7']}]},options:chartOpts('องค์ประกอบวงจรเงินสด')});
+  mkChart('cccChart',{type:'bar',data:{labels:['DSO','DIO','DPO','= CCC'],datasets:[{label:'วัน',data:[c.dso,c.dio,-c.dpo,c.ccc],backgroundColor:['#2f6b4c','#bd8b00','#9a6a43','#214f37']}]},options:chartOpts('องค์ประกอบวงจรเงินสด')});
 }
 
 async function tabJobs(){
@@ -513,7 +536,7 @@ function tabImport(){
 // utils
 // ============================================================
 function chartOpts(title){
-  return {responsive:true,maintainAspectRatio:false,plugins:{title:{display:true,text:title,color:'#e8eef5',font:{size:14}},legend:{labels:{color:'#90a4b8'}}},scales:{x:{ticks:{color:'#90a4b8'},grid:{color:'#27384a'}},y:{ticks:{color:'#90a4b8'},grid:{color:'#27384a'}}}};
+  return {responsive:true,maintainAspectRatio:false,plugins:{title:{display:true,text:title,color:'#214f37',font:{size:14,weight:'600'}},legend:{labels:{color:'#6f4a2e'}}},scales:{x:{ticks:{color:'#8a8473'},grid:{color:'#ece4d4'}},y:{ticks:{color:'#8a8473'},grid:{color:'#ece4d4'}}}};
 }
 const CAT={salary:'เงินเดือน',rent:'ค่าเช่า',utility:'ค่าน้ำ-ไฟ',transport:'ค่าขนส่ง',paint:'ค่าสี',wood:'ค่าไม้',hardware:'ฮาร์ดแวร์',marketing:'การตลาด',other:'อื่นๆ',material_wood:'ไม้',material_paint:'สี',material_hardware:'ฮาร์ดแวร์',labor:'ค่าแรง',overhead:'โสหุ้ย'};
 const catTH=(c)=>CAT[c]||c;
