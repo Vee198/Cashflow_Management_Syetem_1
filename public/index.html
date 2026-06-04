@@ -10,29 +10,33 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#f4f1e9;            /* ครีมอบอุ่น สีกระดาษ/ไม้อ่อน */
-    --bg-grad:radial-gradient(1100px 560px at 82% -12%, #ece5d5 0%, #f4f1e9 55%);
-    --panel:#fffdf9;         /* ขาวนวล */
-    --panel2:#efe9db;        /* เบจอ่อน (อินพุต) */
-    --line:#e3dbca;          /* เส้นขอบอุ่น */
-    --text:#283129;          /* เขียวถ่านเข้ม (ตัวอักษร) */
-    --muted:#8a8473;         /* น้ำตาลเทา */
-    --accent:#2f6b4c;        /* เขียวป่า (สีหลัก) */
-    --accent-d:#214f37;      /* เขียวเข้ม */
-    --wood:#9a6a43;          /* น้ำตาลไม้ */
-    --wood-d:#6f4a2e;        /* วอลนัท */
-    --gold:#b8922f;          /* ทอง (หรูหรา) */
-    --green:#2f8f5b; --yellow:#bd8b00; --red:#b4502f;
-    --shadow:0 1px 2px rgba(60,45,20,.05), 0 10px 30px rgba(60,45,20,.06);
+    --bg:#f1f4ec;            /* เซจ-ครีมอ่อน (พาสเทล) */
+    --bg-grad:
+      radial-gradient(680px 420px at 10% 6%, rgba(120,170,135,.12), transparent 60%),
+      radial-gradient(620px 420px at 93% 4%, rgba(198,166,112,.10), transparent 55%),
+      radial-gradient(760px 540px at 80% 98%, rgba(120,170,135,.10), transparent 60%),
+      linear-gradient(180deg,#f5f7f0 0%,#edf1e6 100%);
+    --panel:#fffffe;         /* ขาวนวล */
+    --panel2:#eef1e7;        /* เซจอ่อน (อินพุต) */
+    --line:#e4e8da;          /* เส้นขอบเซจจาง */
+    --text:#37433b;          /* เขียวอมเทาเข้ม นุ่มตา */
+    --muted:#8c9384;         /* เซจเทา */
+    --accent:#5a9d77;        /* เขียวเซจพาสเทล (สีหลัก) */
+    --accent-d:#3f7d5c;      /* เขียวเข้มกว่า */
+    --wood:#bb9170;          /* ไม้อ่อน/แทน */
+    --wood-d:#8a6a4c;        /* ไม้เข้ม */
+    --gold:#c9aa63;          /* ทองนวล */
+    --green:#4aa478; --yellow:#dca03a; --red:#d4694c;   /* สถานะ พาสเทลแต่ชัด */
+    --shadow:0 1px 2px rgba(70,80,60,.05), 0 10px 28px rgba(70,80,60,.07);
     --font:'Sarabun','Segoe UI',system-ui,sans-serif;
     --serif:'Playfair Display','Sarabun',serif;
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:var(--font);background:var(--bg);background-image:var(--bg-grad);background-attachment:fixed;color:var(--text);font-size:15px}
-  header{background:linear-gradient(135deg,#1f482e 0%,#2f6b4c 55%,#357050 100%);border-bottom:3px solid var(--gold);padding:14px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:10;box-shadow:0 4px 18px rgba(25,45,30,.22);color:#f3efe2}
-  header h1{font-size:20px;margin:0;font-weight:700;color:#fff;letter-spacing:.3px}
-  header .sub{color:#cfe1cf;font-size:12.5px;letter-spacing:.2px}
-  header .muted{color:#bcd2bd !important}
+  header{background:linear-gradient(135deg,#5a9d77 0%,#74ad8d 55%,#83b89c 100%);border-bottom:3px solid var(--gold);padding:14px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:10;box-shadow:0 3px 16px rgba(90,157,119,.25);color:#ffffff}
+  header h1{font-size:20px;margin:0;font-weight:700;color:#fff;letter-spacing:.3px;text-shadow:0 1px 2px rgba(40,70,50,.18)}
+  header .sub{color:#eef7ef;font-size:12.5px;letter-spacing:.2px}
+  header .muted{color:#e6f2e7 !important}
   .spacer{flex:1}
   .ctrl{display:flex;align-items:center;gap:8px}
   input[type=date]{background:rgba(255,255,255,.92);border:1px solid rgba(255,255,255,.5);color:#283129;padding:6px 8px;border-radius:8px;font-family:var(--font)}
@@ -48,8 +52,14 @@
   .grid{display:grid;gap:14px}
   .cards{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow);position:relative;overflow:hidden;transition:transform .15s,box-shadow .15s}
-  .card::after{content:'';position:absolute;left:0;top:0;height:100%;width:3px;background:linear-gradient(var(--accent),var(--gold))}
-  .card:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(60,45,20,.1),0 16px 38px rgba(60,45,20,.08)}
+  .card::after{content:'';position:absolute;left:0;top:0;height:100%;width:4px;background:linear-gradient(var(--accent),var(--gold))}
+  .card-green::after{background:var(--green)}
+  .card-yellow::after{background:var(--yellow)}
+  .card-red::after{background:var(--red)}
+  .card-green{background:linear-gradient(180deg,rgba(74,164,120,.06),var(--panel) 60%)}
+  .card-yellow{background:linear-gradient(180deg,rgba(220,160,58,.07),var(--panel) 60%)}
+  .card-red{background:linear-gradient(180deg,rgba(212,105,76,.07),var(--panel) 60%)}
+  .card:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(60,70,50,.1),0 16px 38px rgba(60,70,50,.08)}
   .card h3{margin:0 0 4px;font-size:13px;color:var(--muted);font-weight:500;display:flex;align-items:center;gap:6px}
   .card .big{font-size:27px;font-weight:700;margin:4px 0;font-family:var(--serif);color:var(--text);letter-spacing:.3px}
   .card .note{font-size:12px;color:var(--muted)}
@@ -87,7 +97,7 @@
 </style>
 </head>
 <body>
-<div id="loginScreen" style="position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;align-items:center;justify-content:center">
+<div id="loginScreen" style="position:fixed;inset:0;background:var(--bg);background-image:var(--bg-grad);z-index:100;display:flex;align-items:center;justify-content:center">
   <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:36px;width:340px;max-width:90%">
     <div style="text-align:center"><img src="https://cdn.phototourl.com/free/2026-06-04-4bf268f0-68d4-4ac1-9558-6fe8362f128c.jpg" alt="WAYTHAI-FORYOU" onerror="this.style.display='none'" style="height:76px;width:76px;border-radius:18px;object-fit:cover;box-shadow:0 6px 18px rgba(47,107,76,.28)"></div>
     <h2 style="text-align:center;margin:12px 0 0;font-family:var(--serif);letter-spacing:.5px;color:var(--accent-d)">WAYTHAI-FORYOU</h2>
@@ -129,6 +139,7 @@ const state = { mode:'basic', tab:'overview', asOf:new Date().toISOString().slic
 const charts = {};
 const baht = (s)=> (s==null?'-':'฿'+(Math.round(s)/100).toLocaleString('th-TH',{maximumFractionDigits:0}));
 const pct = (v)=> (v==null?'-':v.toLocaleString('th-TH',{maximumFractionDigits:1})+'%');
+const flowNote = (net)=> net<=0 ? `เงินเข้าสุทธิ +${baht(-net)}/เดือน` : `เผาเงินสุทธิ −${baht(net)}/เดือน`;
 const pill = (st)=> `<span class="pill pill-${st}">${st==='green'?'ปกติ':st==='yellow'?'เฝ้าระวัง':'เสี่ยง'}</span>`;
 const dot = (st)=> `<span class="badge bdot-${st}"></span>`;
 const tip = (t)=> `<span class="tip" data-tip="${t}">?</span>`;
@@ -148,8 +159,6 @@ const TABS = [
   {id:'production', label:'การผลิต', adv:false},
   {id:'inventory', label:'คลังสินค้า', adv:false},
   {id:'payroll', label:'เงินเดือน', adv:false},
-  {id:'budget', label:'งบประมาณ', adv:false},
-  {id:'forecast', label:'พยากรณ์เงินสด', adv:false},
   {id:'ccc', label:'วงจรเงินสด (CCC)', adv:true},
   {id:'jobs', label:'กำไรรายงาน', adv:true},
   {id:'abc', label:'ABC / ของตาย', adv:true},
@@ -167,9 +176,11 @@ function renderNav(){
   nav.querySelectorAll('button').forEach(b=> b.onclick=()=>{ state.tab=b.dataset.tab; renderNav(); route(); });
 }
 function card(title, tipText, bigHtml, noteHtml, status){
-  return `<div class="card">
+  const col = status==='green'?'var(--green)':status==='yellow'?'var(--yellow)':status==='red'?'var(--red)':'var(--text)';
+  const icon = status==='green'?'✓ ':status==='yellow'?'▲ ':status==='red'?'▼ ':'';
+  return `<div class="card card-${status||'neutral'}">
     <h3>${status?dot(status):''}${title}${tipText?tip(tipText):''}</h3>
-    <div class="big">${bigHtml}</div>
+    <div class="big" style="color:${col}">${status?`<span style="font-size:.7em;vertical-align:2px">${icon}</span>`:''}${bigHtml}</div>
     <div class="note">${noteHtml||''}</div>
   </div>`;
 }
@@ -189,8 +200,6 @@ async function route(){
     if(state.tab==='production') return await tabProduction();
     if(state.tab==='inventory') return await tabInventory();
     if(state.tab==='payroll') return await tabPayroll();
-    if(state.tab==='budget') return await tabBudget();
-    if(state.tab==='forecast') return await tabForecast();
     if(state.tab==='ccc') return await tabCCC();
     if(state.tab==='jobs') return await tabJobs();
     if(state.tab==='abc') return await tabABC();
@@ -198,30 +207,124 @@ async function route(){
   }catch(e){ setMain(`<div class="alert">เกิดข้อผิดพลาด: ${e.message}<br><span class="muted">ตรวจว่าได้ตั้งค่า D1 และ seed ข้อมูลแล้ว (ดู README)</span></div>`); }
 }
 
+// ── เกมพยากรณ์การเงินสิ้นปี (Gamification) ──────────────────
+let GAME=null;
+function runForecastGame(){
+  const sl=document.getElementById('spendSlider'); if(!sl||!GAME) return;
+  const mult=+sl.value/100;
+  let bal=GAME.cash, depletion=null; const series=[];
+  for(let i=0;i<GAME.monthsLeft;i++){ bal += GAME.inflow - GAME.outflow*mult; series.push(Math.round(bal)); if(bal<0&&depletion===null) depletion=GAME.labels[i]; }
+  const yearEnd=bal, monthlyExpense=GAME.outflow*mult, buffer=Math.max(1,monthlyExpense*3);
+  let score=Math.round((yearEnd/buffer)*50+50); score=Math.max(0,Math.min(100,score)); if(depletion) score=Math.min(score,12);
+  let emoji,color,verdict;
+  if(depletion){ emoji='💀'; color='var(--red)'; verdict=`ย่อยยับ! เงินจะหมดราว <b>${depletion}</b> — ต้องหั่นรายจ่ายหรือเร่งเก็บหนี้ด่วน ไม่งั้นไม่รอดสิ้นปี`; }
+  else if(score>=65){ emoji='😎'; color='var(--green)'; verdict=`รอดสบาย! ถึงสิ้นปีคาดเหลือเงินสด <b>${baht(yearEnd)}</b> มีกันชนเหลือเฟือ บริหารดีมาก`; }
+  else if(score>=40){ emoji='😅'; color='var(--yellow)'; verdict=`เฉียดฉิว! ถึงสิ้นปีเหลือ <b>${baht(yearEnd)}</b> พอรอดแต่ต้องคุมให้ดี อย่าประมาท`; }
+  else { emoji='😰'; color='#e0853a'; verdict=`เริ่มอันตราย! เงินร่อยหรอ สิ้นปีเหลือแค่ <b>${baht(yearEnd)}</b> ควรกลับไปตรวจงบ/ลดรายจ่าย`; }
+  const over=Math.round((mult-1)*100);
+  const overTxt = over>0?`<b style="color:var(--red)">เกินค่าเฉลี่ย +${over}% (overbudget!)</b>`:over<0?`<b style="color:var(--green)">ประหยัดกว่าเฉลี่ย ${over}%</b>`:`<b>เท่าค่าเฉลี่ยจริง (Actual)</b>`;
+  document.getElementById('gameSpendVal').textContent=(mult*100).toFixed(0)+'%';
+  document.getElementById('gameSpendBaht').innerHTML=`ใช้จ่าย ${baht(monthlyExpense)}/เดือน · ${overTxt}`;
+  document.getElementById('gameEmoji').textContent=emoji;
+  document.getElementById('gameVerdict').innerHTML=verdict;
+  const bar=document.getElementById('gameBar'); bar.style.width=Math.max(4,score)+'%'; bar.style.background=color;
+  document.getElementById('gameScore').textContent=score;
+  mkChart('gameChart',{type:'line',data:{labels:GAME.labels,datasets:[{label:'เงินสดคาดการณ์ (บาท)',data:series.map(v=>v/100),borderColor:color,backgroundColor:'rgba(90,157,119,.10)',fill:true,tension:.25,pointRadius:2}]},options:chartOpts('เส้นทางเงินสดถึงสิ้นปี (เส้น 0 = เงินหมด)')});
+}
+
 async function tabOverview(){
-  const d = await api('/summary');
+  const period=(state.asOf||'').slice(0,7);
+  const [d,fc,bud] = await Promise.all([api('/summary'), api('/forecast'), api('/budget?period='+period)]);
   const r = d.runway, l = d.liquidity, g = d.gross_margin, p = d.paint;
-  const runwayTxt = r.runway_months==null ? 'กระแสบวก ✓' : r.runway_months+' เดือน';
+  const runwayTxt = r.runway_months==null ? 'กระแสบวก' : r.runway_months+' เดือน';
+  const w=fc.thirteen_week, lr=fc.long_range, firstNeg=w.first_negative_week;
+  // ตั้งค่าเกมพยากรณ์ — ฉายถึงสิ้นปีปัจจุบัน
+  const dd=new Date(state.asOf), yr=dd.getFullYear(); const mo=dd.getMonth();
+  let monthsLeft=11-mo; if(monthsLeft<1) monthsLeft=12;
+  const glabels=[]; for(let i=1;i<=monthsLeft;i++){ glabels.push(new Date(yr,mo+i,1).toISOString().slice(0,7)); }
+  GAME={cash:r.cash_satang,inflow:r.avg_inflow_satang,outflow:r.avg_outflow_satang,monthsLeft,labels:glabels};
+
   setMain(`
     <div class="section">
       <h2>สรุปที่เจ้าของถามบ่อย</h2>
       <div class="grid cards">
-        ${card('เงินสดในมือ','เงินจริงๆ ที่มีอยู่ตอนนี้ รวมทุกบัญชี', baht(d.cash_on_hand_satang),'รวมทุกบัญชีธนาคาร/เงินสด', null)}
-        ${card('เงินพอใช้อีก (Runway)','ถ้าใช้จ่ายแบบเดิม เงินสดจะอยู่ได้อีกกี่เดือนก่อนหมด = เงินในมือ ÷ เงินที่เผาต่อเดือน', runwayTxt, 'เผาเงินสุทธิ '+baht(r.net_burn_satang)+'/เดือน '+pill(r.status), r.status)}
+        ${card('เงินสดในมือ','เงินจริงๆ ที่มีอยู่ตอนนี้ รวมทุกบัญชี', baht(d.cash_on_hand_satang),'รวมทุกบัญชีธนาคาร/เงินสด', d.cash_on_hand_satang>0?'green':'red')}
+        ${card('เงินพอใช้อีก (Runway)','ถ้าใช้จ่ายแบบเดิม เงินสดจะอยู่ได้อีกกี่เดือนก่อนหมด = เงินในมือ ÷ เงินที่เผาต่อเดือน', runwayTxt, flowNote(r.net_burn_satang)+' '+pill(r.status), r.status)}
         ${card('สภาพคล่อง (Current Ratio)','สินทรัพย์หมุนเวียน ÷ หนี้สินระยะสั้น — ของที่เปลี่ยนเป็นเงินได้ พอจ่ายหนี้สั้นไหม (≥1.5 ดี)', l.current_ratio, 'Quick ratio '+l.quick_ratio+' '+pill(l.current_status), l.current_status)}
         ${card('กำไรขั้นต้น','ขายได้ 100 บาท เหลือกี่บาทหลังหักต้นทุนทำของ', pct(g.gross_margin_pct), 'ยอดขาย '+baht(g.revenue_satang), g.gross_margin_pct>=30?'green':g.gross_margin_pct>=15?'yellow':'red')}
         ${card('ค่าใช้จ่าย/ยอดขาย','ทุกหมวดค่าใช้จ่ายรวมเป็นกี่ % ของยอดขาย', pct(d.expense_to_sales.expense_to_sales_pct), 'ดูรายหมวดในแท็บต้นทุน', d.expense_to_sales.expense_to_sales_pct<60?'green':d.expense_to_sales.expense_to_sales_pct<80?'yellow':'red')}
         ${card('ต้นทุนค่าสี','สัดส่วนค่าสีต่อยอดขาย + แนวโน้ม — โจทย์ที่เจ้าของห่วง', pct(p.paint_pct_of_revenue), 'ต่อบาน '+baht(p.paint_per_door_satang)+' · แนวโน้ม '+(p.trend_direction==='up'?'⬆ เพิ่มขึ้น':p.trend_direction==='down'?'⬇ ลดลง':'➡ คงที่')+' '+pill(p.status), p.status)}
       </div>
     </div>
+
+    <div class="section">
+      <h2>🎮 เครื่องวัดดวงการเงินสิ้นปี ${tip('เอาค่าใช้จ่ายเฉลี่ยจริงมาฉายอนาคต — เลื่อนสไลเดอร์ดูว่าถ้าใช้จ่ายระดับนี้ ถึงสิ้นปีจะรอดหรือย่อยยับ')}</h2>
+      <div class="card card-neutral" style="padding:22px">
+        <div style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:10px">ถ้าใช้จ่ายแบบนี้ไปเรื่อยๆ ถึงสิ้นปี <b>ธ.ค. ${yr}</b> จะเป็นยังไง? ลองเลื่อนดู 👇</div>
+        <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:center">
+          <div style="font-size:62px;line-height:1" id="gameEmoji">🎮</div>
+          <div style="flex:1;min-width:260px">
+            <div id="gameVerdict" style="font-size:16px;font-weight:600;margin-bottom:12px;line-height:1.55"></div>
+            <div style="background:var(--panel2);border-radius:20px;height:20px;overflow:hidden;border:1px solid var(--line)">
+              <div id="gameBar" style="height:100%;width:50%;border-radius:20px;transition:width .35s,background .35s"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:5px">
+              <span>💀 ล่มจม</span><span>สุขภาพการเงิน <b id="gameScore">--</b>/100</span><span>รอดสบาย 😎</span>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:20px">
+          <label style="font-size:13px;color:var(--muted)">ระดับการใช้จ่ายต่อเดือน: <b id="gameSpendVal" style="color:var(--accent-d)">100%</b></label>
+          <input id="spendSlider" type="range" min="60" max="200" step="5" value="100" oninput="runForecastGame()" style="width:100%;accent-color:var(--accent);margin-top:8px;cursor:pointer">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted)"><span>🌱 ประหยัด 60%</span><span>Actual 100%</span><span>🔥 เปลือง 200%</span></div>
+          <div id="gameSpendBaht" style="font-size:13px;margin-top:10px;text-align:center"></div>
+        </div>
+        <div class="chartbox" style="height:230px;margin-top:14px;box-shadow:none;border:1px dashed var(--line);padding:10px"><canvas id="gameChart"></canvas></div>
+      </div>
+    </div>
+
     <div class="row">
       <div class="chartbox"><canvas id="ovPaint"></canvas></div>
       <div class="chartbox"><canvas id="ovExp"></canvas></div>
     </div>
+
+    <div class="section" style="margin-top:28px"><h2>พยากรณ์เงินสด 13 สัปดาห์ ${tip('มองเงินสดรายสัปดาห์ 1 ไตรมาส แบบ direct method (เงินที่ขยับจริง)')}</h2>
+      ${firstNeg?`<div class="alert">⚠ เงินสดอาจติดลบในสัปดาห์ที่ <b>${firstNeg}</b> — ควรเร่งเก็บลูกหนี้หรือเลื่อนจ่ายเจ้าหนี้</div>`:'<div class="card card-green">✓ ใน 13 สัปดาห์ข้างหน้า เงินสดไม่ติดลบ</div>'}
+      <div class="chartbox" style="margin-top:14px"><canvas id="fc13"></canvas></div>
+    </div>
+    <div class="section"><h2>พยากรณ์ระยะยาว 18 เดือน — รอดหรือล่มจม? ${tip('ฉาย 3 ฉากทัศน์จากกระแสเงินสดเฉลี่ย')}</h2>
+      <div class="scenario-leg">
+        <span><i class="swatch" style="background:#9a6a43"></i>Base (ปัจจุบัน)</span>
+        <span><i class="swatch" style="background:#4aa478"></i>ดีขึ้น (เก็บเร็ว/คุมต้นทุน)</span>
+        <span><i class="swatch" style="background:#d4694c"></i>แย่ลง (เก็บช้า/ต้นทุนพุ่ง)</span>
+      </div>
+      <div class="grid cards" style="margin-bottom:14px">
+        ${card('ฉากปัจจุบัน (Base)', 'ถ้าใช้จ่ายแบบเดิม', lr.base.depletion_month?('เงินหมด '+lr.base.depletion_month):'รอด','', lr.base.depletion_month?'red':'green')}
+        ${card('ฉากดีขึ้น','รับเร็วขึ้น 10% / จ่ายลด 10%', lr.optimistic.depletion_month?('เงินหมด '+lr.optimistic.depletion_month):'รอด','', lr.optimistic.depletion_month?'yellow':'green')}
+        ${card('ฉากแย่ลง','รับช้าลง / ต้นทุนพุ่ง 15%', lr.pessimistic.depletion_month?('เงินหมด '+lr.pessimistic.depletion_month):'รอด','', lr.pessimistic.depletion_month?'red':'yellow')}
+      </div>
+      <div class="chartbox"><canvas id="fcLong"></canvas></div>
+    </div>
+    <div class="section"><h2>งบประมาณ vs จริง — ${bud.period} ${tip('Variance = จริง − งบ; รายจ่ายต่ำกว่างบ = ดี, รายรับเกินงบ = ดี')}</h2>
+      <div class="card"><table><thead><tr><th>หมวด</th><th>ประเภท</th><th>งบ</th><th>จริง</th><th>ส่วนต่าง</th><th>%</th><th></th></tr></thead><tbody>
+      ${bud.rows.length?bud.rows.map(x=>`<tr><td>${catTH(x.category)}</td><td>${x.type==='revenue'?'รายรับ':'รายจ่าย'}</td><td>${baht(x.budget_satang)}</td><td>${baht(x.actual_satang)}</td><td style="color:var(--${x.status})">${baht(x.variance_satang)}</td><td>${pct(x.variance_pct)}</td><td>${pill(x.status)}</td></tr>`).join(''):'<tr><td colspan=7 class="muted">ยังไม่มีงบสำหรับเดือนนี้ — เพิ่มผ่านแท็บนำเข้าข้อมูล (entity: budgets)</td></tr>'}
+      </tbody></table></div>
+    </div>
   `);
-  mkChart('ovPaint',{type:'line',data:{labels:p.trend.map(t=>t.month),datasets:[{label:'ค่าสีต่อเดือน (บาท)',data:p.trend.map(t=>t.paint_satang/100),borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.1)',fill:true,tension:.3}]},options:chartOpts('แนวโน้มต้นทุนค่าสี')});
+  mkChart('ovPaint',{type:'line',data:{labels:p.trend.map(t=>t.month),datasets:[{label:'ค่าสีต่อเดือน (บาท)',data:p.trend.map(t=>t.paint_satang/100),borderColor:'#d4694c',backgroundColor:'rgba(212,105,76,.12)',fill:true,tension:.3}]},options:chartOpts('แนวโน้มต้นทุนค่าสี')});
   const e = d.expense_to_sales.rows.slice(0,6);
-  mkChart('ovExp',{type:'bar',data:{labels:e.map(x=>catTH(x.category)),datasets:[{label:'% ของยอดขาย',data:e.map(x=>x.pct_of_sales),backgroundColor:'#2f6b4c'}]},options:chartOpts('ค่าใช้จ่ายต่อยอดขาย (รายหมวด)')});
+  mkChart('ovExp',{type:'bar',data:{labels:e.map(x=>catTH(x.category)),datasets:[{label:'% ของยอดขาย',data:e.map(x=>x.pct_of_sales),backgroundColor:'#5a9d77'}]},options:chartOpts('ค่าใช้จ่ายต่อยอดขาย (รายหมวด)')});
+  mkChart('fc13',{type:'bar',data:{labels:w.weeks.map(x=>'W'+x.week),datasets:[
+    {label:'รับเข้า',data:w.weeks.map(x=>x.inflow_satang/100),backgroundColor:'#4aa478',stack:'f'},
+    {label:'จ่ายออก',data:w.weeks.map(x=>-x.outflow_satang/100),backgroundColor:'#d4694c',stack:'f'},
+    {type:'line',label:'เงินสดคงเหลือ',data:w.weeks.map(x=>x.balance_satang/100),borderColor:'#3f7d5c',backgroundColor:'#3f7d5c',tension:.2,yAxisID:'y'}
+  ]},options:chartOpts('กระแสเงินสดรายสัปดาห์ + ยอดคงเหลือ')});
+  mkChart('fcLong',{type:'line',data:{labels:lr.base.series.map(x=>x.month),datasets:[
+    {label:'Base',data:lr.base.series.map(x=>x.balance_satang/100),borderColor:'#9a6a43',tension:.2},
+    {label:'ดีขึ้น',data:lr.optimistic.series.map(x=>x.balance_satang/100),borderColor:'#4aa478',tension:.2},
+    {label:'แย่ลง',data:lr.pessimistic.series.map(x=>x.balance_satang/100),borderColor:'#d4694c',tension:.2}
+  ]},options:chartOpts('แนวโน้มเงินสด 18 เดือน (เส้น 0 = เงินหมด)')});
+  runForecastGame();
 }
 
 async function tabCash(){
@@ -233,7 +336,7 @@ async function tabCash(){
         ${card('เงินสดรวม','รวมทุกบัญชี', baht(d.on_hand.total_satang),'', null)}
         ${card('รับเข้าเฉลี่ย/เดือน','เฉลี่ย 3 เดือนล่าสุด', baht(r.avg_inflow_satang),'', 'green')}
         ${card('จ่ายออกเฉลี่ย/เดือน','เฉลี่ย 3 เดือนล่าสุด', baht(r.avg_outflow_satang),'', 'yellow')}
-        ${card('เผาเงินสุทธิ/เดือน','จ่ายออก − รับเข้า (บวก = เงินไหลออก)', baht(r.net_burn_satang), r.runway_months==null?'กระแสบวก':'Runway '+r.runway_months+' เดือน', r.status)}
+        ${card('กระแสเงินสดสุทธิ/เดือน','รับเข้า − จ่ายออก (บวก = เงินเหลือ, ลบ = เผาเงิน)', (r.net_burn_satang<=0?'+':'−')+baht(Math.abs(r.net_burn_satang)), r.runway_months==null?'กระแสเป็นบวก เงินเข้ามากกว่าออก':'Runway '+r.runway_months+' เดือน', r.status)}
       </div>
     </div>
     <div class="card"><h3>ยอดแยกรายบัญชี</h3>
@@ -373,54 +476,6 @@ async function tabPayroll(){
     {label:'OT',data:t.map(x=>x.ot/100),backgroundColor:'#eab308'}
   ]},options:chartOpts('แนวโน้มค่าจ้าง + OT รายเดือน')});
   mkChart('paySplit',{type:'doughnut',data:{labels:['ประจำ','พาร์ทไทม์'],datasets:[{data:[s.ft_gross_satang/100,s.pt_gross_satang/100],backgroundColor:['#2f6b4c','#9a6a43']}]},options:chartOpts('สัดส่วนค่าจ้าง ประจำ vs พาร์ทไทม์')});
-}
-
-async function tabBudget(){
-  const period = (state.asOf||'').slice(0,7);
-  const d = await api('/budget?period='+period);
-  setMain(`
-    <div class="section"><h2>งบประมาณ vs จริง — ${d.period} ${tip('Variance = จริง − งบ; รายจ่ายต่ำกว่างบ = ดี, รายรับเกินงบ = ดี')}</h2>
-      <div class="card"><table><thead><tr><th>หมวด</th><th>ประเภท</th><th>งบ</th><th>จริง</th><th>ส่วนต่าง</th><th>%</th><th></th></tr></thead><tbody>
-      ${d.rows.length?d.rows.map(r=>`<tr><td>${catTH(r.category)}</td><td>${r.type==='revenue'?'รายรับ':'รายจ่าย'}</td><td>${baht(r.budget_satang)}</td><td>${baht(r.actual_satang)}</td><td style="color:var(--${r.status})">${baht(r.variance_satang)}</td><td>${pct(r.variance_pct)}</td><td>${pill(r.status)}</td></tr>`).join(''):'<tr><td colspan=7 class="muted">ยังไม่มีงบสำหรับเดือนนี้ — เพิ่มผ่านแท็บนำเข้าข้อมูล (entity: budgets)</td></tr>'}
-      </tbody></table></div>
-    </div>
-  `);
-}
-
-async function tabForecast(){
-  const d = await api('/forecast');
-  const w=d.thirteen_week, lr=d.long_range;
-  const firstNeg = w.first_negative_week;
-  const baseDepl = lr.base.depletion_month;
-  setMain(`
-    <div class="section"><h2>พยากรณ์เงินสด 13 สัปดาห์ ${tip('มองเงินสดรายสัปดาห์ 1 ไตรมาส แบบ direct method (เงินที่ขยับจริง)')}</h2>
-      ${firstNeg?`<div class="alert">⚠ เงินสดอาจติดลบในสัปดาห์ที่ <b>${firstNeg}</b> — ควรเร่งเก็บลูกหนี้หรือเลื่อนจ่ายเจ้าหนี้</div>`:'<div class="card" style="border-color:rgba(34,197,94,.3)">✓ ใน 13 สัปดาห์ข้างหน้า เงินสดไม่ติดลบ</div>'}
-      <div class="chartbox" style="margin-top:14px"><canvas id="fc13"></canvas></div>
-    </div>
-    <div class="section"><h2>พยากรณ์ระยะยาว 18 เดือน — รอดหรือล่มจม? ${tip('ฉาย 3 ฉากทัศน์จากกระแสเงินสดเฉลี่ย')}</h2>
-      <div class="scenario-leg">
-        <span><i class="swatch" style="background:#9a6a43"></i>Base (ปัจจุบัน)</span>
-        <span><i class="swatch" style="background:#22c55e"></i>ดีขึ้น (เก็บเร็ว/คุมต้นทุน)</span>
-        <span><i class="swatch" style="background:#ef4444"></i>แย่ลง (เก็บช้า/ต้นทุนพุ่ง)</span>
-      </div>
-      <div class="grid cards" style="margin-bottom:14px">
-        ${card('ฉากปัจจุบัน (Base)', 'ถ้าใช้จ่ายแบบเดิม', baseDepl?('เงินหมด '+baseDepl):'รอด ✓','', baseDepl?'red':'green')}
-        ${card('ฉากดีขึ้น','รับเร็วขึ้น 10% / จ่ายลด 10%', lr.optimistic.depletion_month?('เงินหมด '+lr.optimistic.depletion_month):'รอด ✓','', lr.optimistic.depletion_month?'yellow':'green')}
-        ${card('ฉากแย่ลง','รับช้าลง / ต้นทุนพุ่ง 15%', lr.pessimistic.depletion_month?('เงินหมด '+lr.pessimistic.depletion_month):'รอด ✓','', lr.pessimistic.depletion_month?'red':'yellow')}
-      </div>
-      <div class="chartbox"><canvas id="fcLong"></canvas></div>
-    </div>
-  `);
-  mkChart('fc13',{type:'bar',data:{labels:w.weeks.map(x=>'W'+x.week),datasets:[
-    {label:'รับเข้า',data:w.weeks.map(x=>x.inflow_satang/100),backgroundColor:'#22c55e',stack:'f'},
-    {label:'จ่ายออก',data:w.weeks.map(x=>-x.outflow_satang/100),backgroundColor:'#ef4444',stack:'f'},
-    {type:'line',label:'เงินสดคงเหลือ',data:w.weeks.map(x=>x.balance_satang/100),borderColor:'#2f6b4c',backgroundColor:'#2f6b4c',tension:.2,yAxisID:'y'}
-  ]},options:chartOpts('กระแสเงินสดรายสัปดาห์ + ยอดคงเหลือ')});
-  mkChart('fcLong',{type:'line',data:{labels:lr.base.series.map(x=>x.month),datasets:[
-    {label:'Base',data:lr.base.series.map(x=>x.balance_satang/100),borderColor:'#9a6a43',tension:.2},
-    {label:'ดีขึ้น',data:lr.optimistic.series.map(x=>x.balance_satang/100),borderColor:'#22c55e',tension:.2},
-    {label:'แย่ลง',data:lr.pessimistic.series.map(x=>x.balance_satang/100),borderColor:'#ef4444',tension:.2}
-  ]},options:chartOpts('แนวโน้มเงินสด 18 เดือน (เส้น 0 = เงินหมด)')});
 }
 
 async function tabCCC(){
