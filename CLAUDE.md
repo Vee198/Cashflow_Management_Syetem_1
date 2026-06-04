@@ -26,8 +26,9 @@ Webapp สำหรับบริหาร **กระแสเงินสด 
 | Runtime | **Cloudflare Workers** (Node.js compat) | API |
 | Framework | **Hono** | router น้ำหนักเบา |
 | Database | **Cloudflare D1** (SQLite) | ข้อมูลหลัก |
-| Object storage | **Cloudflare R2** | ไฟล์ import/export, ใบกำกับ |
+| Object storage | **Cloudflare R2** | ไฟล์ import/export (ปิดไว้ก่อน — ฟีเจอร์เสริม ต้องเปิด R2 ใน Dashboard ก่อน) |
 | Frontend | **Vanilla JS + Chart.js** (static assets) | SPA ไฟล์เดียว เสิร์ฟผ่าน Worker assets |
+| Auth | **HMAC-SHA256 token** (Web Crypto) | login user/password, token อายุ 12 ชม. |
 
 โครงสร้างโฟลเดอร์:
 ```
@@ -40,16 +41,20 @@ Cashflow_System/
 ├── schema.sql           ← โครงตาราง D1
 ├── seed.sql             ← ข้อมูลตัวอย่าง (ประตูไม้ + ต้นทุนสีเยอะ)
 ├── src/
-│   ├── index.js         ← Worker entry (Hono routes)
-│   ├── analytics.js     ← สูตรการเงินทั้งหมด (runway, aging, forecast)
+│   ├── index.js         ← Worker entry (Hono routes + login/auth middleware)
+│   ├── analytics.js     ← สูตรการเงิน/การผลิต/เงินเดือนทั้งหมด (pure functions)
 │   ├── repo.js          ← query helpers (เข้าถึง D1)
-│   └── import.js        ← รับข้อมูลตาม IMPORT CONTRACT
+│   └── import.js        ← รับข้อมูลตาม IMPORT CONTRACT + คำนวณเงินเดือน (computePayroll)
 ├── public/
-│   └── index.html       ← Dashboard ภาษาไทย (SPA)
+│   └── index.html       ← Dashboard ภาษาไทย (SPA) + หน้า login + 2 โหมด
+├── test/
+│   └── verify.mjs       ← โหลด schema+seed เข้า SQLite แล้วรันสูตรจริง (22 เคส)
 └── docs/
-    ├── IMPORT_CONTRACT.md  ← สเปกไฟล์ให้ Python ETL ยิงเข้ามา
+    ├── IMPORT_CONTRACT.md  ← สเปกไฟล์ให้ Python ETL ยิงเข้ามา (13 entity)
     └── RESEARCH.md         ← สรุปงานวิจัย feature + ที่มา
 ```
+
+> ตรวจความถูกต้องของสูตรก่อน deploy ได้ตลอด: `node test/verify.mjs` (ควรได้ ผ่าน 22/0)
 
 ---
 
@@ -76,6 +81,8 @@ Cashflow_System/
 - **API:** REST ใต้ `/api/*`, ตอบ JSON, ใช้ HTTP status ปกติ
 - **Naming:** ตาราง/คอลัมน์ = snake_case อังกฤษ; ป้าย UI = ไทย
 - **สูตรการเงินทั้งหมดอยู่ใน `src/analytics.js` ที่เดียว** — ห้ามกระจายสูตรไปทั่ว
+- **Auth:** ทุก `/api/*` (ยกเว้น `/api/login`, `/api/health`) ต้องมี `Authorization: Bearer <token>`; รหัส/secret ตั้งผ่าน env (`ADMIN_USER`/`ADMIN_PASS`/`AUTH_SECRET`) — **ดีฟอลต์ admin/admin ต้องเปลี่ยนก่อนใช้จริง**
+- **เงินเดือน:** ประกันสังคมคิด 5% ฐาน 1,650–15,000 บาท (สูงสุด 750/เดือน), นายจ้างสมทบเท่ากัน; ภาษีบุคคลรับจาก ETL/กรอกมือ (ไม่เดาเอง)
 
 ---
 
@@ -104,12 +111,17 @@ npx wrangler deploy
 3. **13-week rolling cash flow forecast** (direct method) — หัวใจของการพยากรณ์
 4. **AR Aging / DSO** และ **AP Aging / DPO**
 5. **Cash Conversion Cycle** = DSO + DIO − DPO
-6. **Inventory turnover / มูลค่าสต็อก / ของค้างนาน**
-7. **สัดส่วนค่าใช้จ่ายต่อยอดขาย** (expense-to-sales) รายหมวด
-8. **วิเคราะห์ต้นทุนการผลิต & ต้นทุนสี** — โจทย์เฉพาะของเจ้าของ ("จมกับค่าสี")
-9. **Budget vs Actual + variance**
-10. **พยากรณ์แนวโน้มเงินสด** — base/optimistic/pessimistic → "รอดหรือล่มจม"
-11. **กำไรรายงาน (job profitability)** — งานไหนทำกำไร/ขาดทุน
+6. **สัดส่วนค่าใช้จ่ายต่อยอดขาย** (expense-to-sales) รายหมวด
+7. **วิเคราะห์ต้นทุนการผลิต & ต้นทุนสี** — โจทย์เฉพาะของเจ้าของ ("จมกับค่าสี")
+8. **Budget vs Actual + variance**
+9. **พยากรณ์แนวโน้มเงินสด** — base/optimistic/pessimistic → "รอดหรือล่มจม"
+10. **กำไรรายงาน (job profitability)** — งานไหนทำกำไร/ขาดทุน + break-even
+11. **วิเคราะห์การผลิต (Production)** — Yield, Scrap (+มูลค่า), Rework, On-time delivery, Fill rate, Lead time
+12. **คลังสินค้า / WMS** — มูลค่าสต็อก, แจ้งเตือนของใกล้หมด (ROP+safety stock), ของตาย/ของช้า, **ABC analysis**, cycle counting, EOQ
+13. **เงินเดือน (Payroll)** — ประจำ/พาร์ทไทม์, OT, ภาษีหัก ณ ที่จ่าย, **ประกันสังคม** (กฎไทย 5% สูงสุด 750), ต้นทุนบริษัทจริง (รวมนายจ้างสมทบ)
+
+> สูตร/นิยามทั้งหมดอยู่ใน **SKILL.md** (A=เงินสด, B=aging/CCC, C=ต้นทุน&สี, D=งบ&พยากรณ์, G=การผลิต, H=คลัง, I=เงินเดือน)
+> หน้าจอแบ่ง **2 โหมด**: พื้นฐาน (สำหรับเจ้าของ 2 คน) / ขั้นสูง (KPI ครบสำหรับนักบัญชี-นักวิเคราะห์)
 
 ---
 

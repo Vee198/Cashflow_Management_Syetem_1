@@ -15,6 +15,16 @@
 - **ภาษาคน (วิศวกร)** — แปลว่าอะไรในชีวิตจริง
 - **เกณฑ์เตือน** — ค่าไหนเริ่มน่าห่วง (สีเขียว/เหลือง/แดง)
 
+**แผนผังโมดูล (ตรงกับ `src/analytics.js` และแท็บใน Dashboard):**
+- **A** สภาพคล่อง & เงินสด (cash on hand, burn, runway, ratios)
+- **B** Aging & วงจรเงินสด (AR/AP aging, DSO/DPO/DIO, CCC)
+- **C** ต้นทุน & กำไร + ★วิเคราะห์ค่าสี (COGS, gross margin, paint analysis, job profitability, break-even)
+- **D** งบประมาณ & พยากรณ์ (budget vs actual, 13-week, ระยะยาว 3 ฉากทัศน์)
+- **G** วิเคราะห์การผลิต (yield, scrap, rework, OTD, fill rate, lead time)
+- **H** คลัง/WMS (มูลค่าสต็อก, ROP, dead stock, ABC, cycle count, EOQ)
+- **I** เงินเดือน (ประจำ/พาร์ทไทม์, OT, ภาษี, ประกันสังคม, ต้นทุนบริษัทจริง)
+- **E** KPI เสริมที่นักวิเคราะห์แนะนำ · **F** กฎการอธิบาย output
+
 ---
 
 ## A. สภาพคล่อง & เงินสด (Liquidity & Cash)
