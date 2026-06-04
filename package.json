@@ -1,0 +1,22 @@
+{
+  "name": "cashflow-system",
+  "version": "0.1.0",
+  "description": "ระบบบริหารกระแสเงินสด สำหรับธุรกิจรับจ้างผลิตประตูไม้ (Cloudflare Workers + D1 + R2)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:init:local": "wrangler d1 execute cashflow_db --local --file=./schema.sql",
+    "db:seed:local": "wrangler d1 execute cashflow_db --local --file=./seed.sql",
+    "db:init:remote": "wrangler d1 execute cashflow_db --remote --file=./schema.sql",
+    "db:seed:remote": "wrangler d1 execute cashflow_db --remote --file=./seed.sql",
+    "setup:local": "npm run db:init:local && npm run db:seed:local"
+  },
+  "dependencies": {
+    "hono": "^4.6.3"
+  },
+  "devDependencies": {
+    "wrangler": "^4.97.0"
+  }
+}

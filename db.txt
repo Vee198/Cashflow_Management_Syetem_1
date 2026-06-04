@@ -1,0 +1,9 @@
+[[d1_databases]]
+binding = "cashflow_db"
+database_name = "cashflow_db"
+database_id = "6baee3ff-cede-40c4-b64f-b3195a452fda"
+
+npx wrangler secret put ADMIN_PASS = admin
+npx wrangler secret put AUTH_SECRET = admin
+
+https://github.com/Vee198/Cashflow_Management_Syetem_1.git

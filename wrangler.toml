@@ -1,0 +1,33 @@
+name = "cashflow-system"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Frontend (SPA) เสิร์ฟจากโฟลเดอร์ public
+# ไฟล์ static เสิร์ฟก่อน; path ที่ไม่ตรงไฟล์ (เช่น /api/*) จะวิ่งเข้า Worker เอง
+assets = { directory = "./public", binding = "ASSETS" }
+
+# ── D1 Database ──────────────────────────────────────────────
+# ครั้งแรกรัน: npx wrangler d1 create cashflow_db
+# แล้วเอา database_id ที่ได้มาวางแทน "REPLACE_WITH_YOUR_D1_ID"
+[[d1_databases]]
+binding = "DB"
+database_name = "cashflow_db"
+database_id = "6baee3ff-cede-40c4-b64f-b3195a452fda"
+
+# ── R2 Bucket (ไฟล์ import/export) — ปิดไว้ก่อน (ฟีเจอร์เสริม) ─
+# R2 ต้องกด "เปิดใช้งาน" ในหน้า Cloudflare Dashboard ก่อน (เมนู R2)
+# พอเปิดแล้วค่อยรัน: npx wrangler r2 bucket create cashflow-files
+# แล้วลบเครื่องหมาย # ออกจาก 3 บรรทัดล่างนี้
+# [[r2_buckets]]
+# binding = "FILES"
+# bucket_name = "cashflow-files"
+
+[vars]
+APP_TZ = "Asia/Bangkok"
+CURRENCY = "THB"
+# ── Login (เปลี่ยนก่อนใช้งานจริง!) ───────────────────────────
+# โปรดเปลี่ยนรหัสผ่านก่อน deploy จริง และตั้ง AUTH_SECRET เป็นค่าสุ่มยาวๆ
+ADMIN_USER = "admin"
+ADMIN_PASS = "admin"
+AUTH_SECRET = "change-this-to-a-long-random-secret"
