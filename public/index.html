@@ -167,6 +167,7 @@ async function api(path){
 
 const TABS = [
   {id:'overview', label:'ภาพรวม', adv:false},
+  {id:'advisor', label:'💡 คำแนะนำ', adv:false},
   {id:'cash', label:'เงินสด & สภาพคล่อง', adv:false},
   {id:'aging', label:'อายุหนี้ (AR/AP)', adv:false},
   {id:'cost', label:'ต้นทุน & ค่าสี', adv:false},
@@ -214,6 +215,7 @@ async function route(){
   setMain('<div class="loading">กำลังโหลด…</div>');
   try{
     if(state.tab==='overview') return await tabOverview();
+    if(state.tab==='advisor') return await tabAdvisor();
     if(state.tab==='cash') return await tabCash();
     if(state.tab==='aging') return await tabAging();
     if(state.tab==='cost') return await tabCost();
@@ -684,6 +686,35 @@ async function tabABC(){
       </tbody></table></div>
     </div>
   `);
+}
+
+// ── เฟส 6: ที่ปรึกษาการเงินอัตโนมัติ (Recommendations) ──────
+async function tabAdvisor(){
+  const d=await api('/recommendations'); const recs=d.recommendations, conc=d.concentration;
+  const sev={red:'ความเสี่ยงสูง',yellow:'ควรเฝ้าระวัง',green:'สถานะดี'};
+  setMain(`
+    <div class="section"><h2>💡 ที่ปรึกษาการเงินอัตโนมัติ ${tip('ระบบอ่าน KPI ทั้งหมดแล้วจัดอันดับสิ่งที่ควรทำตามความเสี่ยง/ผลกระทบ — เริ่มจากบนสุด')}</h2>
+      ${recs.map((r,i)=>`<div class="card card-${r.severity}" style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span class="pill pill-${r.severity}">${sev[r.severity]}</span>
+          <b style="font-size:15px">${i+1}. ${r.title}</b>
+          ${r.score_gain?`<span class="pill pill-green" title="ผลต่อ Financial Score">Score ${r.score_gain}</span>`:''}
+        </div>
+        <div style="margin-top:6px;font-size:13px">${r.detail}</div>
+        <div style="margin-top:8px;font-size:13px"><b>แนะนำให้ทำ:</b> ${r.action}</div>
+        ${r.impact?`<div style="margin-top:6px;font-size:13px;color:var(--accent-d)"><b>ผลที่คาดว่าจะได้:</b> ${r.impact}</div>`:''}
+      </div>`).join('')}
+    </div>
+    <div class="section"><h2>การกระจุกตัวของลูกค้า (Customer Concentration) ${tip('ลูกค้ารายใหญ่คิดเป็นสัดส่วนยอดขายเท่าไร — กระจุกมาก = เสี่ยงถ้าเสียลูกค้ารายนั้น')}</h2>
+      <div class="row">
+        <div class="chartbox"><canvas id="concChart"></canvas></div>
+        <div class="card" style="flex:1"><table><thead><tr><th>ลูกค้า</th><th>ยอดขาย</th><th>% ของยอดขาย</th></tr></thead><tbody>
+          ${conc.rows.map(x=>`<tr><td>${x.customer}</td><td>${baht(x.satang)}</td><td>${pct(x.pct)}</td></tr>`).join('')||'<tr><td colspan=3 class="muted">ยังไม่มีข้อมูลยอดขาย</td></tr>'}
+        </tbody></table></div>
+      </div>
+    </div>
+  `);
+  mkChart('concChart',{type:'doughnut',data:{labels:conc.rows.map(x=>x.customer),datasets:[{data:conc.rows.map(x=>x.satang/100),backgroundColor:['#5a9d77','#9a6a43','#c9aa63','#d4694c','#7cb295','#b0a48f']}]},options:chartOpts('สัดส่วนยอดขายตามลูกค้า')});
 }
 
 // ── เฟส 4: BOM / เครื่องคำนวณราคาขาย (client-side) ──────────

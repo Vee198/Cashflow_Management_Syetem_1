@@ -299,6 +299,45 @@ app.get('/api/financials', async (c) => {
   } catch (e) { return err(c, e, 500); }
 });
 
+// ---------- RECOMMENDATIONS (ที่ปรึกษาการเงินอัตโนมัติ) ----------
+app.get('/api/recommendations', async (c) => {
+  try {
+    const db = c.env.DB;
+    const asOf = asOfOf(c);
+    const [cashTxns, invoices, bills, jobCosts, jobs, expenses, items, movements, payslips, customers] = await Promise.all([
+      repo.getCashTxns(db), repo.getInvoices(db), repo.getBills(db), repo.getJobCosts(db), repo.getJobs(db),
+      repo.getExpenses(db), repo.getInventoryItems(db), repo.getInventoryMovements(db), repo.getPayslips(db), repo.getCustomers(db),
+    ]);
+    const revenue = await repo.getTotalRevenue(db);
+    const cogs = A.cogsBreakdown(jobCosts);
+    const gm = A.grossMargin(revenue, cogs.total_satang);
+    const runway = A.burnAndRunway(cashTxns, asOf, 3);
+    const ar = A.arAging(invoices, asOf);
+    const ccc = A.cashConversionCycle({
+      avgAR: await repo.getOutstandingAR(db), creditSales: revenue, avgAP: await repo.getOutstandingAP(db),
+      cogs: cogs.total_satang, avgInventory: A.inventoryValue(items).total_satang, windowDays: 90,
+    });
+    const paint = A.paintAnalysis({ jobCosts, jobs, revenueSatang: revenue });
+    const dead = A.deadStock(items, movements, asOf);
+    const reorder = A.reorderAlerts(items);
+    const prod = A.productionMetrics(jobs);
+    const scrap = A.scrapCost(jobs, jobCosts);
+    const e2s = A.expenseToSales(expenses, revenue);
+    const pay = A.payrollSummary(payslips, null, revenue);
+    const conc = A.customerConcentration(invoices, customers);
+    const ctx = {
+      gm_pct: gm.gross_margin_pct, dso: ccc.dso, dio: ccc.dio, ccc: ccc.ccc,
+      ar_d90: ar.d90_plus, runway_months: runway.runway_months,
+      dead_value: dead.dead_value_satang, reorder_count: reorder.length,
+      scrap_pct: prod.scrap_pct, scrap_cost: scrap.scrap_cost_satang, otd_pct: prod.on_time_delivery_pct,
+      expense_to_sales_pct: e2s.expense_to_sales_pct,
+      paint_pct_revenue: paint.paint_pct_of_revenue, paint_trend: paint.trend_direction, paint_total: paint.paint_total_satang,
+      ot_pct: pay.ot_pct_of_payroll, top_customer_pct: conc.top_pct, top_customer_name: conc.top_name,
+    };
+    return ok(c, { recommendations: A.recommendations(ctx), concentration: conc });
+  } catch (e) { return err(c, e, 500); }
+});
+
 // ---------- รายการดิบ (drill-down) ----------
 app.get('/api/list/:entity', async (c) => {
   try {

@@ -438,6 +438,37 @@ export function deadStock(items, movements, asOf, slowDays = 180, deadDays = 365
   return { rows, dead_value_satang: deadValue, slow_value_satang: slowValue };
 }
 
+// Inventory Aging — จัดกลุ่มมูลค่าสต็อกตามจำนวนวันที่ไม่เคลื่อนไหว (อิง movement out ล่าสุด)
+export function inventoryAging(items, movements, asOf) {
+  const lastOut = {};
+  for (const m of movements) {
+    if (m.movement_type !== 'out') continue;
+    if (!lastOut[m.item_id] || m.moved_at > lastOut[m.item_id]) lastOut[m.item_id] = m.moved_at;
+  }
+  const buckets = { d0_30: 0, d31_60: 0, d61_90: 0, d91_180: 0, d180_plus: 0, total: 0 };
+  const rows = [];
+  for (const it of items) {
+    const val = Math.round((it.qty_on_hand || 0) * (it.unit_cost_satang || 0));
+    if (val <= 0) continue;
+    const last = lastOut[it.id];
+    const idle = last ? daysBetween(last, asOf) : 9999;
+    let b;
+    if (idle <= 30) b = 'd0_30';
+    else if (idle <= 60) b = 'd31_60';
+    else if (idle <= 90) b = 'd61_90';
+    else if (idle <= 180) b = 'd91_180';
+    else b = 'd180_plus';
+    buckets[b] += val; buckets.total += val;
+    rows.push({
+      item_id: it.id, name: it.name, category: it.category, bin_location: it.bin_location,
+      qty_on_hand: it.qty_on_hand, unit: it.unit, idle_days: idle === 9999 ? null : idle,
+      value_satang: val, bucket: b, last_out: last || null,
+    });
+  }
+  rows.sort((a, b) => b.value_satang - a.value_satang);
+  return { buckets, rows };
+}
+
 // ABC analysis — จัดกลุ่มตาม usage value (ใช้ × ต้นทุน) ช่วงที่ผ่านมา
 export function abcAnalysis(items, movements, asOf, windowDays = 365) {
   const cutoff = new Date(asOf); cutoff.setDate(cutoff.getDate() - windowDays);
@@ -467,4 +498,134 @@ export function abcAnalysis(items, movements, asOf, windowDays = 365) {
 export function eoq({ annualDemand, orderCostSatang, holdingCostPerUnitSatang }) {
   if (!holdingCostPerUnitSatang) return 0;
   return Math.round(Math.sqrt((2 * annualDemand * orderCostSatang) / holdingCostPerUnitSatang));
+}
+
+// ============================================================
+// J. งบการเงิน (Financial Statements) — จริง + dummy ส่วนที่ขาด
+// ============================================================
+// งบกำไรขาดทุน (Income Statement)
+export function incomeStatement({ revenueSatang, cogs, expenses, depreciationSatang = 0, interestSatang = 0, taxRate = 0.20 }) {
+  const cogsTotal = cogs.total_satang;
+  const grossProfit = revenueSatang - cogsTotal;
+  const opexByCat = {};
+  for (const e of expenses) opexByCat[e.category] = (opexByCat[e.category] || 0) + e.amount_satang;
+  const opexTotal = sum(Object.values(opexByCat));
+  const ebitda = grossProfit - opexTotal;
+  const ebit = ebitda - depreciationSatang;
+  const ebt = ebit - interestSatang;
+  const tax = ebt > 0 ? Math.round(ebt * taxRate) : 0;
+  const netProfit = ebt - tax;
+  const r1 = (x) => Math.round(safeDiv(x, revenueSatang) * 1000) / 10;
+  return {
+    revenue: revenueSatang, cogs: cogsTotal, cogs_by_type: cogs.by_type,
+    gross_profit: grossProfit, gross_margin_pct: r1(grossProfit),
+    opex_by_cat: opexByCat, opex_total: opexTotal,
+    ebitda, depreciation: depreciationSatang, ebit,
+    interest: interestSatang, ebt, tax,
+    net_profit: netProfit, net_margin_pct: r1(netProfit),
+  };
+}
+
+// งบดุล (Balance Sheet) — สินทรัพย์จริง + รายการสมมติ; ส่วนของเจ้าของ = สินทรัพย์ − หนี้สิน (balancing)
+export function balanceSheet({ cashSatang, arSatang, inventorySatang, apSatang,
+  fixedAssetsSatang = 0, otherCurrentSatang = 0, shortLoanSatang = 0, longDebtSatang = 0, paidInCapitalSatang = 0 }) {
+  const currentAssets = cashSatang + arSatang + inventorySatang + otherCurrentSatang;
+  const totalAssets = currentAssets + fixedAssetsSatang;
+  const currentLiab = apSatang + shortLoanSatang;
+  const totalLiab = currentLiab + longDebtSatang;
+  const equity = totalAssets - totalLiab;
+  const retained = equity - paidInCapitalSatang;
+  return {
+    assets: { cash: cashSatang, ar: arSatang, inventory: inventorySatang, other_current: otherCurrentSatang, current_total: currentAssets, fixed: fixedAssetsSatang, total: totalAssets },
+    liabilities: { ap: apSatang, short_loan: shortLoanSatang, current_total: currentLiab, long_debt: longDebtSatang, total: totalLiab },
+    equity: { paid_in: paidInCapitalSatang, retained, total: equity },
+    balanced: Math.abs(totalAssets - (totalLiab + equity)) < 100,
+  };
+}
+
+// ============================================================
+// K. Recommendation Engine + Customer Concentration (#15/#18)
+// ============================================================
+// การกระจุกตัวของลูกค้า — ลูกค้ารายใหญ่คิดเป็นกี่ % ของยอดขาย
+export function customerConcentration(invoices, customers) {
+  const nameById = {};
+  for (const c of customers) nameById[c.id] = c.name;
+  const byCust = {}; let total = 0;
+  for (const i of invoices) {
+    if (i.status === 'void') continue;
+    byCust[i.customer_id] = (byCust[i.customer_id] || 0) + i.amount_satang;
+    total += i.amount_satang;
+  }
+  const rows = Object.entries(byCust)
+    .map(([id, s]) => ({ customer: nameById[id] || ('#' + id), satang: s, pct: Math.round(safeDiv(s, total) * 1000) / 10 }))
+    .sort((a, b) => b.satang - a.satang);
+  return { rows, top_name: rows[0] ? rows[0].customer : '-', top_pct: rows[0] ? rows[0].pct : 0, total_satang: total };
+}
+
+// ที่ปรึกษาการเงินอัตโนมัติ — กฎเชิงผลกระทบ คืนรายการคำแนะนำเรียงตามความรุนแรง
+export function recommendations(ctx) {
+  const money = (s) => '฿' + Math.round((s || 0) / 100).toLocaleString('en-US');
+  const recs = [];
+  const add = (severity, title, detail, action, impact, scoreGain) =>
+    recs.push({ severity, title, detail, action, impact: impact || '', score_gain: scoreGain || '' });
+
+  if (ctx.paint_pct_revenue > 25 || ctx.paint_trend === 'up')
+    add('red', 'ต้นทุนค่าสีสูงผิดปกติ',
+      `ค่าสีคิดเป็น ${ctx.paint_pct_revenue}% ของยอดขาย${ctx.paint_trend === 'up' ? ' และมีแนวโน้มเพิ่มขึ้น' : ''}`,
+      'เจรจาราคากับซัพพลายเออร์สี/เทียบเจ้าใหม่ ลดการพ่นซ้ำ และทบทวนปริมาณสีต่อบาน',
+      `ลดค่าสีได้ 10% ≈ ประหยัด ${money(Math.round(ctx.paint_total * 0.10))}`, '+0.2');
+  if (ctx.gm_pct < 15)
+    add('red', 'กำไรขั้นต้นต่ำ', `กำไรขั้นต้นเพียง ${ctx.gm_pct}% (เกณฑ์ปลอดภัย 15–30%)`,
+      'ใช้แท็บ BOM ตั้งราคาจากต้นทุนจริง + กำไรเป้าหมาย และทบทวนงานที่ขาดทุน (แท็บกำไรรายงาน)',
+      'ปรับ margin +5% เพิ่มกำไรทั้งกิจการอย่างมีนัยสำคัญ', '+0.4');
+  else if (ctx.gm_pct < 30)
+    add('yellow', 'กำไรขั้นต้นยังเพิ่มได้', `กำไรขั้นต้น ${ctx.gm_pct}%`,
+      'คุมต้นทุนวัตถุดิบหลัก (ไม้/สี) และเพิ่มสัดส่วนงานมาร์จิ้นสูง', '', '+0.2');
+  if (ctx.ar_d90 > 0)
+    add('red', 'ลูกหนี้ค้างเกิน 90 วัน', `มียอดค้างเกิน 90 วัน ${money(ctx.ar_d90)} เสี่ยงเป็นหนี้สูญ`,
+      'ติดตามทวงถามด่วน พิจารณาตั้งสำรองหนี้สงสัยจะสูญ และทบทวนเครดิตลูกค้ารายนี้',
+      `เก็บได้ = เงินสด +${money(ctx.ar_d90)}`, '');
+  if (ctx.dso > 60)
+    add('red', 'เก็บเงินลูกค้าช้า', `DSO ${ctx.dso} วัน (ควร ≤ 45)`,
+      'วางบิลทันทีที่ส่งมอบ ตั้งเงื่อนไขมัดจำ/วางบิลเป็นงวด และติดตามลูกหนี้เชิงรุก',
+      'ลด DSO เหลือ 45 วัน ช่วยให้เงินสดเข้าเร็วขึ้น', '+0.3');
+  else if (ctx.dso > 45)
+    add('yellow', 'การเก็บเงินช้ากว่าเทอม', `DSO ${ctx.dso} วัน`,
+      'ติดตามลูกหนี้ที่ใกล้ครบกำหนดล่วงหน้า', '', '+0.1');
+  if (ctx.runway_months !== null && ctx.runway_months < 3)
+    add('red', 'เงินสำรองต่ำมาก', `Runway เหลือ ${ctx.runway_months} เดือน`,
+      'ชะลอรายจ่ายไม่จำเป็น เร่งเก็บลูกหนี้ เจรจาขยายเครดิตเจ้าหนี้ และเตรียมวงเงินสำรอง', '', '+0.3');
+  else if (ctx.runway_months !== null && ctx.runway_months < 6)
+    add('yellow', 'เงินสำรองค่อนข้างตึง', `Runway ${ctx.runway_months} เดือน`,
+      'คุมกระแสเงินสดและติดตามพยากรณ์ 13 สัปดาห์ใกล้ชิด', '', '+0.1');
+  if (ctx.scrap_pct > 7)
+    add('red', 'ของเสียสูง', `Scrap ${ctx.scrap_pct}% (มูลค่า ${money(ctx.scrap_cost)})`,
+      'หาสาเหตุของเสีย (วัตถุดิบ/ฝีมือ/เครื่องจักร) และเพิ่ม QC ระหว่างผลิต',
+      `ลดของเสียครึ่งหนึ่ง ≈ ประหยัด ${money(Math.round(ctx.scrap_cost / 2))}`, '');
+  if (ctx.dead_value > 0)
+    add('yellow', 'มีของตายจมในคลัง', `มูลค่าของไม่เคลื่อนไหวเกิน 1 ปี ${money(ctx.dead_value)}`,
+      'ระบายสต็อก/ลดราคา/นำไปใช้กับงานอื่น เพื่อปลดเงินที่จม', `ปลดเงินจม ${money(ctx.dead_value)}`, '');
+  if (ctx.reorder_count > 0)
+    add('yellow', 'วัตถุดิบใกล้หมด', `${ctx.reorder_count} รายการถึงจุดสั่งซื้อ (ROP)`,
+      'สั่งซื้อตามจุด ROP เพื่อกันสายการผลิตหยุด (ดูแท็บคลังสินค้า)', '', '');
+  if (ctx.otd_pct >= 0 && ctx.otd_pct < 85)
+    add('yellow', 'ส่งมอบไม่ตรงเวลา', `On-time delivery ${ctx.otd_pct}%`,
+      'ทบทวนการวางแผนผลิต/lead time และสื่อสารวันส่งกับลูกค้าตามจริง',
+      'ส่งตรงเวลาช่วยให้เก็บเงินเร็วขึ้น (ลด DSO)', '');
+  if (ctx.expense_to_sales_pct > 80)
+    add('yellow', 'ค่าใช้จ่ายต่อยอดขายสูง', `${ctx.expense_to_sales_pct}% ของยอดขาย`,
+      'ตรวจหมวดที่กินสัดส่วนมาก (แท็บต้นทุน) แล้วหาทางลด', '', '');
+  if (ctx.ot_pct > 20)
+    add('yellow', 'ค่าล่วงเวลา (OT) สูง', `OT ${ctx.ot_pct}% ของค่าจ้าง`,
+      'ทบทวนการวางแผนกำลังคน/คิวงาน อาจคุ้มกว่าจ้างเพิ่มหรือกระจายงาน', '', '');
+  if (ctx.top_customer_pct > 40)
+    add('yellow', 'พึ่งพาลูกค้ารายเดียวมาก', `${ctx.top_customer_name} คิดเป็น ${ctx.top_customer_pct}% ของยอดขาย`,
+      'กระจายฐานลูกค้าเพื่อลดความเสี่ยงหากเสียลูกค้ารายนี้', '', '');
+
+  const rank = { red: 3, yellow: 2, green: 1 };
+  recs.sort((a, b) => rank[b.severity] - rank[a.severity]);
+  if (!recs.length)
+    add('green', 'สถานะการเงินแข็งแรง', 'ไม่พบสัญญาณความเสี่ยงสำคัญจาก KPI ปัจจุบัน',
+      'รักษาวินัยการเงินและติดตาม Financial Score อย่างต่อเนื่อง', '', '');
+  return recs;
 }
