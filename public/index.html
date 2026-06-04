@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>WAYTHAI-FORYOU — ระบบบริหารกระแสเงินสด</title>
+<title>WAYTHAI-FORYOU · ระบบบริหารกระแสเงินสด</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -94,6 +95,10 @@
   .scenario-leg{display:flex;gap:16px;font-size:13px;margin-bottom:8px}
   .scenario-leg span{display:flex;align-items:center;gap:6px}
   .swatch{width:14px;height:3px;border-radius:2px;display:inline-block}
+  .hz-btn{background:var(--panel);border:1px solid var(--line);color:var(--muted);padding:6px 14px;border-radius:8px;cursor:pointer;font-family:var(--font);font-size:13px}
+  .hz-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+  .stars{color:var(--gold);letter-spacing:3px}
+  .scorebar{flex:1;background:var(--panel2);border-radius:10px;height:8px;overflow:hidden}
 </style>
 </head>
 <body>
@@ -121,6 +126,12 @@
     <span class="muted" style="font-size:13px">ณ วันที่</span>
     <input type="date" id="asOf" />
   </div>
+  <div class="ctrl" id="rangeCtrl" title="ใช้กับแท็บข้อมูล/ตาราง">
+    <span class="muted" style="font-size:13px">ช่วง</span>
+    <input type="date" id="dateFrom" />
+    <span class="muted">—</span>
+    <input type="date" id="dateTo" />
+  </div>
   <div class="toggle" id="modeToggle">
     <button data-mode="basic" class="active">พื้นฐาน</button>
     <button data-mode="advanced">ขั้นสูง</button>
@@ -135,11 +146,14 @@
 // ============================================================
 // state & helpers
 // ============================================================
-const state = { mode:'basic', tab:'overview', asOf:new Date().toISOString().slice(0,10) };
+const state = { mode:'basic', tab:'overview', asOf:new Date().toISOString().slice(0,10), from:null, to:null, dataEntity:'invoices' };
 const charts = {};
 const baht = (s)=> (s==null?'-':'฿'+(Math.round(s)/100).toLocaleString('th-TH',{maximumFractionDigits:0}));
 const pct = (v)=> (v==null?'-':v.toLocaleString('th-TH',{maximumFractionDigits:1})+'%');
 const flowNote = (net)=> net<=0 ? `เงินเข้าสุทธิ +${baht(-net)}/เดือน` : `เผาเงินสุทธิ −${baht(net)}/เดือน`;
+const bahtN = (x)=>'฿'+Math.round(x||0).toLocaleString('th-TH'); // บาทตรงๆ (ไม่ใช่สตางค์) สำหรับเครื่องคิดเลข BOM
+const authHdr = ()=>({'Authorization':'Bearer '+(state.token||'')});
+const ENTITIES = ['customers','suppliers','jobs','job_costs','invoices','bills','inventory_items','inventory_movements','expenses','cash_transactions','budgets','employees','payslips'];
 const pill = (st)=> `<span class="pill pill-${st}">${st==='green'?'ปกติ':st==='yellow'?'เฝ้าระวัง':'เสี่ยง'}</span>`;
 const dot = (st)=> `<span class="badge bdot-${st}"></span>`;
 const tip = (t)=> `<span class="tip" data-tip="${t}">?</span>`;
@@ -156,12 +170,18 @@ const TABS = [
   {id:'cash', label:'เงินสด & สภาพคล่อง', adv:false},
   {id:'aging', label:'อายุหนี้ (AR/AP)', adv:false},
   {id:'cost', label:'ต้นทุน & ค่าสี', adv:false},
+  {id:'bom', label:'BOM / ตั้งราคา', adv:false},
   {id:'production', label:'การผลิต', adv:false},
   {id:'inventory', label:'คลังสินค้า', adv:false},
+  {id:'inv_detail', label:'รายละเอียดสต็อก', adv:false},
+  {id:'inv_aging', label:'อายุสต็อก', adv:false},
   {id:'payroll', label:'เงินเดือน', adv:false},
+  {id:'data', label:'ข้อมูล (ตาราง)', adv:false},
+  {id:'log', label:'ประวัติ/เวอร์ชัน', adv:false},
   {id:'ccc', label:'วงจรเงินสด (CCC)', adv:true},
   {id:'jobs', label:'กำไรรายงาน', adv:true},
   {id:'abc', label:'ABC / ของตาย', adv:true},
+  {id:'financials', label:'งบการเงิน', adv:true},
   {id:'import', label:'นำเข้าข้อมูล', adv:false},
 ];
 
@@ -197,12 +217,18 @@ async function route(){
     if(state.tab==='cash') return await tabCash();
     if(state.tab==='aging') return await tabAging();
     if(state.tab==='cost') return await tabCost();
+    if(state.tab==='bom') return tabBOM();
     if(state.tab==='production') return await tabProduction();
     if(state.tab==='inventory') return await tabInventory();
+    if(state.tab==='inv_detail') return await tabInvDetail();
+    if(state.tab==='inv_aging') return await tabInvAging();
     if(state.tab==='payroll') return await tabPayroll();
+    if(state.tab==='data') return await tabData();
+    if(state.tab==='log') return await tabLog();
     if(state.tab==='ccc') return await tabCCC();
     if(state.tab==='jobs') return await tabJobs();
     if(state.tab==='abc') return await tabABC();
+    if(state.tab==='financials') return await tabFinancials();
     if(state.tab==='import') return tabImport();
   }catch(e){ setMain(`<div class="alert">เกิดข้อผิดพลาด: ${e.message}<br><span class="muted">ตรวจว่าได้ตั้งค่า D1 และ seed ข้อมูลแล้ว (ดู README)</span></div>`); }
 }
@@ -217,12 +243,12 @@ function runForecastGame(){
   const yearEnd=bal, monthlyExpense=GAME.outflow*mult, buffer=Math.max(1,monthlyExpense*3);
   let score=Math.round((yearEnd/buffer)*50+50); score=Math.max(0,Math.min(100,score)); if(depletion) score=Math.min(score,12);
   let emoji,color,verdict;
-  if(depletion){ emoji='💀'; color='var(--red)'; verdict=`ย่อยยับ! เงินจะหมดราว <b>${depletion}</b> — ต้องหั่นรายจ่ายหรือเร่งเก็บหนี้ด่วน ไม่งั้นไม่รอดสิ้นปี`; }
-  else if(score>=65){ emoji='😎'; color='var(--green)'; verdict=`รอดสบาย! ถึงสิ้นปีคาดเหลือเงินสด <b>${baht(yearEnd)}</b> มีกันชนเหลือเฟือ บริหารดีมาก`; }
-  else if(score>=40){ emoji='😅'; color='var(--yellow)'; verdict=`เฉียดฉิว! ถึงสิ้นปีเหลือ <b>${baht(yearEnd)}</b> พอรอดแต่ต้องคุมให้ดี อย่าประมาท`; }
-  else { emoji='😰'; color='#e0853a'; verdict=`เริ่มอันตราย! เงินร่อยหรอ สิ้นปีเหลือแค่ <b>${baht(yearEnd)}</b> ควรกลับไปตรวจงบ/ลดรายจ่าย`; }
+  if(depletion){ emoji='🔴'; color='var(--red)'; verdict=`สถานะ: วิกฤต — คาดว่ากระแสเงินสดจะติดลบในช่วง <b>${depletion}</b> ควรทบทวนค่าใช้จ่ายและเร่งจัดเก็บลูกหนี้โดยด่วน`; }
+  else if(score>=65){ emoji='🟢'; color='var(--green)'; verdict=`สถานะ: แข็งแรง — คาดว่าสิ้นปีคงเหลือเงินสด <b>${baht(yearEnd)}</b> มีสภาพคล่องเพียงพอ`; }
+  else if(score>=40){ emoji='🟡'; color='var(--yellow)'; verdict=`สถานะ: ต้องเฝ้าระวัง — คาดว่าสิ้นปีคงเหลือ <b>${baht(yearEnd)}</b> ควรควบคุมค่าใช้จ่ายอย่างใกล้ชิด`; }
+  else { emoji='🟠'; color='#e0853a'; verdict=`สถานะ: เสี่ยง — คาดว่าสิ้นปีคงเหลือเพียง <b>${baht(yearEnd)}</b> ควรทบทวนงบประมาณและลดค่าใช้จ่าย`; }
   const over=Math.round((mult-1)*100);
-  const overTxt = over>0?`<b style="color:var(--red)">เกินค่าเฉลี่ย +${over}% (overbudget!)</b>`:over<0?`<b style="color:var(--green)">ประหยัดกว่าเฉลี่ย ${over}%</b>`:`<b>เท่าค่าเฉลี่ยจริง (Actual)</b>`;
+  const overTxt = over>0?`<b style="color:var(--red)">สูงกว่าค่าเฉลี่ย +${over}% (เกินงบประมาณ)</b>`:over<0?`<b style="color:var(--green)">ต่ำกว่าค่าเฉลี่ย ${over}%</b>`:`<b>เท่ากับค่าใช้จ่ายจริง (Actual)</b>`;
   document.getElementById('gameSpendVal').textContent=(mult*100).toFixed(0)+'%';
   document.getElementById('gameSpendBaht').innerHTML=`ใช้จ่าย ${baht(monthlyExpense)}/เดือน · ${overTxt}`;
   document.getElementById('gameEmoji').textContent=emoji;
@@ -232,98 +258,153 @@ function runForecastGame(){
   mkChart('gameChart',{type:'line',data:{labels:GAME.labels,datasets:[{label:'เงินสดคาดการณ์ (บาท)',data:series.map(v=>v/100),borderColor:color,backgroundColor:'rgba(90,157,119,.10)',fill:true,tension:.25,pointRadius:2}]},options:chartOpts('เส้นทางเงินสดถึงสิ้นปี (เส้น 0 = เงินหมด)')});
 }
 
+// ── Financial Score (เต็ม 5) + ฉากทัศน์พยากรณ์ ──────────────
+let FCHORIZON=12;
+function stars(s){const f=Math.round(s);return '★'.repeat(Math.max(0,Math.min(5,f)))+'☆'.repeat(Math.max(0,5-f));}
+function financialScore(o){
+  const cl=v=>Math.max(0,Math.min(1,v));
+  const parts=[
+    {k:'กำไรขั้นต้น (Gross Margin)', s:cl(o.gm/30), val:o.gm.toFixed(1)+'%'},
+    {k:'สภาพคล่อง (Current Ratio)', s:cl(o.cr/2), val:o.cr.toFixed(2)},
+    {k:'สินค้าคงคลัง (DIO)', s:cl((120-o.dio)/90), val:o.dio.toFixed(0)+' วัน'},
+    {k:'วงจรเงินสด (CCC)', s:cl((90-o.ccc)/90), val:o.ccc.toFixed(0)+' วัน'},
+    {k:'เงินสำรอง (Runway)', s:o.runway==null?1:cl(o.runway/12), val:o.runway==null?'กระแสบวก':o.runway+' ด.'},
+    {k:'ระยะเก็บหนี้ (DSO)', s:cl((90-o.dso)/60), val:o.dso.toFixed(0)+' วัน'},
+  ];
+  const avg=parts.reduce((a,b)=>a+b.s,0)/parts.length, score5=Math.round(avg*50)/10;
+  return {score5, parts, status:score5>=3.75?'green':score5>=2.5?'yellow':'red'};
+}
+function scenarioCardsHTML(lr){
+  const end=o=>o.series.length?baht(o.series[o.series.length-1].balance_satang):'-';
+  const sc=(label,desc,o,goodColor)=>card(label,desc,o.depletion_month?('เงินหมด '+o.depletion_month):'อยู่รอด', o.depletion_month?('คาดติดลบ '+o.depletion_month):('คงเหลือปลายงวด '+end(o)), o.depletion_month?'red':goodColor);
+  return sc('กรณีฐาน (Base case)','สมมติฐานปัจจุบัน',lr.base,'green')
+       + sc('กรณีดีที่สุด (Best case)','เก็บเงินเร็วขึ้น 10% / ลดต้นทุน 10%',lr.optimistic,'green')
+       + sc('กรณีแย่ที่สุด (Worst case)','เก็บเงินช้าลง / ต้นทุนเพิ่ม 15%',lr.pessimistic,'yellow');
+}
+async function renderLongRange(months){
+  FCHORIZON=months;
+  document.querySelectorAll('.hz-btn').forEach(b=>b.classList.toggle('active',+b.dataset.m===months));
+  const fc=await api('/forecast?months='+months); const lr=fc.long_range;
+  const el=document.getElementById('scenarioCards'); if(el) el.innerHTML=scenarioCardsHTML(lr);
+  mkChart('fcLong',{type:'line',data:{labels:lr.base.series.map(x=>x.month),datasets:[
+    {label:'Base case',data:lr.base.series.map(x=>x.balance_satang/100),borderColor:'#9a6a43',tension:.2},
+    {label:'Best case',data:lr.optimistic.series.map(x=>x.balance_satang/100),borderColor:'#4aa478',tension:.2},
+    {label:'Worst case',data:lr.pessimistic.series.map(x=>x.balance_satang/100),borderColor:'#d4694c',tension:.2}
+  ]},options:chartOpts('แนวโน้มเงินสด '+months+' เดือน (เส้น 0 = เงินหมด)')});
+}
+
 async function tabOverview(){
   const period=(state.asOf||'').slice(0,7);
-  const [d,fc,bud] = await Promise.all([api('/summary'), api('/forecast'), api('/budget?period='+period)]);
-  const r = d.runway, l = d.liquidity, g = d.gross_margin, p = d.paint;
+  const [d,ag,cost,fc,bud] = await Promise.all([api('/summary'), api('/aging'), api('/cost'), api('/forecast?months='+FCHORIZON), api('/budget?period='+period)]);
+  const r = d.runway, l = d.liquidity, g = d.gross_margin, p = d.paint, c = ag.ccc;
   const runwayTxt = r.runway_months==null ? 'กระแสบวก' : r.runway_months+' เดือน';
   const w=fc.thirteen_week, lr=fc.long_range, firstNeg=w.first_negative_week;
-  // ตั้งค่าเกมพยากรณ์ — ฉายถึงสิ้นปีปัจจุบัน
+  const fs=financialScore({gm:g.gross_margin_pct,cr:l.current_ratio,dio:c.dio,ccc:c.ccc,runway:r.runway_months,dso:c.dso});
   const dd=new Date(state.asOf), yr=dd.getFullYear(); const mo=dd.getMonth();
   let monthsLeft=11-mo; if(monthsLeft<1) monthsLeft=12;
   const glabels=[]; for(let i=1;i<=monthsLeft;i++){ glabels.push(new Date(yr,mo+i,1).toISOString().slice(0,7)); }
   GAME={cash:r.cash_satang,inflow:r.avg_inflow_satang,outflow:r.avg_outflow_satang,monthsLeft,labels:glabels};
+  const cb=cost.cogs.by_type;
+  const rawMat=(cb.material_wood||0)+(cb.material_hardware||0), paintC=cb.material_paint||0, dl=cb.labor||0, oh=cb.overhead||0;
+  const week13st=firstNeg?(firstNeg<=4?'red':'yellow'):'green';
 
   setMain(`
-    <div class="section">
-      <h2>สรุปที่เจ้าของถามบ่อย</h2>
+    <div class="section"><h2>Insight Analysis</h2>
       <div class="grid cards">
         ${card('เงินสดในมือ','เงินจริงๆ ที่มีอยู่ตอนนี้ รวมทุกบัญชี', baht(d.cash_on_hand_satang),'รวมทุกบัญชีธนาคาร/เงินสด', d.cash_on_hand_satang>0?'green':'red')}
-        ${card('เงินพอใช้อีก (Runway)','ถ้าใช้จ่ายแบบเดิม เงินสดจะอยู่ได้อีกกี่เดือนก่อนหมด = เงินในมือ ÷ เงินที่เผาต่อเดือน', runwayTxt, flowNote(r.net_burn_satang)+' '+pill(r.status), r.status)}
-        ${card('สภาพคล่อง (Current Ratio)','สินทรัพย์หมุนเวียน ÷ หนี้สินระยะสั้น — ของที่เปลี่ยนเป็นเงินได้ พอจ่ายหนี้สั้นไหม (≥1.5 ดี)', l.current_ratio, 'Quick ratio '+l.quick_ratio+' '+pill(l.current_status), l.current_status)}
-        ${card('กำไรขั้นต้น','ขายได้ 100 บาท เหลือกี่บาทหลังหักต้นทุนทำของ', pct(g.gross_margin_pct), 'ยอดขาย '+baht(g.revenue_satang), g.gross_margin_pct>=30?'green':g.gross_margin_pct>=15?'yellow':'red')}
-        ${card('ค่าใช้จ่าย/ยอดขาย','ทุกหมวดค่าใช้จ่ายรวมเป็นกี่ % ของยอดขาย', pct(d.expense_to_sales.expense_to_sales_pct), 'ดูรายหมวดในแท็บต้นทุน', d.expense_to_sales.expense_to_sales_pct<60?'green':d.expense_to_sales.expense_to_sales_pct<80?'yellow':'red')}
-        ${card('ต้นทุนค่าสี','สัดส่วนค่าสีต่อยอดขาย + แนวโน้ม — โจทย์ที่เจ้าของห่วง', pct(p.paint_pct_of_revenue), 'ต่อบาน '+baht(p.paint_per_door_satang)+' · แนวโน้ม '+(p.trend_direction==='up'?'⬆ เพิ่มขึ้น':p.trend_direction==='down'?'⬇ ลดลง':'➡ คงที่')+' '+pill(p.status), p.status)}
+        ${card('เงินสำรอง (Runway)','ถ้าใช้จ่ายแบบเดิม เงินสดจะอยู่ได้อีกกี่เดือน = เงินในมือ ÷ เงินที่ใช้สุทธิต่อเดือน', runwayTxt, flowNote(r.net_burn_satang)+' '+pill(r.status), r.status)}
+        ${card('สภาพคล่อง (Current Ratio)','สินทรัพย์หมุนเวียน ÷ หนี้สินระยะสั้น (≥1.5 ถือว่าดี)', l.current_ratio, 'Quick ratio '+l.quick_ratio+' '+pill(l.current_status), l.current_status)}
+        ${card('กำไรขั้นต้น (Gross Margin)','ขายได้ 100 บาท เหลือกำไรขั้นต้นกี่บาทหลังหักต้นทุน', pct(g.gross_margin_pct), 'ยอดขาย '+baht(g.revenue_satang), g.gross_margin_pct>=30?'green':g.gross_margin_pct>=15?'yellow':'red')}
+        ${card('ค่าใช้จ่าย / ยอดขาย','สัดส่วนค่าใช้จ่ายดำเนินงานต่อยอดขาย', pct(d.expense_to_sales.expense_to_sales_pct), 'ดูรายหมวดในแท็บต้นทุน', d.expense_to_sales.expense_to_sales_pct<60?'green':d.expense_to_sales.expense_to_sales_pct<80?'yellow':'red')}
+        ${card('ต้นทุนค่าสี','สัดส่วนค่าสีต่อยอดขายและแนวโน้ม', pct(p.paint_pct_of_revenue), 'ต่อบาน '+baht(p.paint_per_door_satang)+' · แนวโน้ม '+(p.trend_direction==='up'?'เพิ่มขึ้น':p.trend_direction==='down'?'ลดลง':'คงที่')+' '+pill(p.status), p.status)}
       </div>
     </div>
 
-    <div class="section">
-      <h2>🎮 เครื่องวัดดวงการเงินสิ้นปี ${tip('เอาค่าใช้จ่ายเฉลี่ยจริงมาฉายอนาคต — เลื่อนสไลเดอร์ดูว่าถ้าใช้จ่ายระดับนี้ ถึงสิ้นปีจะรอดหรือย่อยยับ')}</h2>
+    <div class="section"><h2>Financial Score ${tip('คะแนนสุขภาพการเงินรวม เต็ม 5 จาก 6 ตัวชี้วัด — ยิ่งสูงยิ่งแข็งแรง')}</h2>
+      <div class="card card-${fs.status}" style="display:flex;gap:26px;flex-wrap:wrap;align-items:center;padding:22px">
+        <div style="text-align:center;min-width:150px">
+          <div style="font-size:46px;font-weight:700;font-family:var(--serif);color:var(--${fs.status})">${fs.score5}<span style="font-size:20px;color:var(--muted)"> / 5</span></div>
+          <div class="stars" style="font-size:22px">${stars(fs.score5)}</div>
+        </div>
+        <div style="flex:1;min-width:300px">
+          ${fs.parts.map(pt=>`<div style="display:flex;align-items:center;gap:10px;margin:7px 0;font-size:13px">
+            <span style="width:200px;color:var(--muted)">${pt.k}</span>
+            <div class="scorebar"><div style="width:${Math.round(pt.s*100)}%;height:100%;background:${pt.s>=.75?'var(--green)':pt.s>=.45?'var(--yellow)':'var(--red)'}"></div></div>
+            <span style="width:78px;text-align:right;font-weight:600">${pt.val}</span>
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>
+
+    <div class="section"><h2>พยากรณ์กระแสเงินสด ${tip('ระยะสั้น 13 สัปดาห์ + ระยะยาวแบบ Base/Best/Worst case เลือกช่วงเวลาได้')}</h2>
+      <div class="grid cards" style="margin-bottom:16px">
+        ${card('พยากรณ์ 13 สัปดาห์ (รายไตรมาส)','สภาพคล่องระยะสั้น คำนวณแบบ direct method', firstNeg?('เสี่ยงสัปดาห์ที่ '+firstNeg):'เพียงพอ', firstNeg?'คาดว่ากระแสเงินสดอาจติดลบ ควรเร่งจัดเก็บลูกหนี้/เจรจาเครดิตเจ้าหนี้':'กระแสเงินสดเพียงพอตลอด 13 สัปดาห์ข้างหน้า', week13st)}
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+        ${[3,6,9,12,24,36].map(m=>`<button onclick="renderLongRange(${m})" class="hz-btn${m===FCHORIZON?' active':''}" data-m="${m}">${m} เดือน</button>`).join('')}
+      </div>
+      <div class="scenario-leg">
+        <span><i class="swatch" style="background:#9a6a43"></i>Base case (ปัจจุบัน)</span>
+        <span><i class="swatch" style="background:#4aa478"></i>Best case</span>
+        <span><i class="swatch" style="background:#d4694c"></i>Worst case</span>
+      </div>
+      <div class="grid cards" id="scenarioCards" style="margin-bottom:14px">${scenarioCardsHTML(lr)}</div>
+      <div class="chartbox"><canvas id="fcLong"></canvas></div>
+    </div>
+
+    <div class="section"><h2>การจำลองสถานการณ์กระแสเงินสดสิ้นปี (Scenario Simulator) ${tip('นำค่าใช้จ่ายเฉลี่ยจริงมาฉายอนาคต — ปรับระดับการใช้จ่ายเพื่อดูผลกระทบถึงสิ้นปี')}</h2>
       <div class="card card-neutral" style="padding:22px">
-        <div style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:10px">ถ้าใช้จ่ายแบบนี้ไปเรื่อยๆ ถึงสิ้นปี <b>ธ.ค. ${yr}</b> จะเป็นยังไง? ลองเลื่อนดู 👇</div>
+        <div style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:10px">หากคงระดับการใช้จ่ายนี้ต่อเนื่องถึงสิ้นปี <b>ธ.ค. ${yr}</b> ผลลัพธ์ที่คาดการณ์:</div>
         <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:center">
-          <div style="font-size:62px;line-height:1" id="gameEmoji">🎮</div>
+          <div style="font-size:56px;line-height:1" id="gameEmoji">🟢</div>
           <div style="flex:1;min-width:260px">
             <div id="gameVerdict" style="font-size:16px;font-weight:600;margin-bottom:12px;line-height:1.55"></div>
             <div style="background:var(--panel2);border-radius:20px;height:20px;overflow:hidden;border:1px solid var(--line)">
               <div id="gameBar" style="height:100%;width:50%;border-radius:20px;transition:width .35s,background .35s"></div>
             </div>
             <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:5px">
-              <span>💀 ล่มจม</span><span>สุขภาพการเงิน <b id="gameScore">--</b>/100</span><span>รอดสบาย 😎</span>
+              <span>วิกฤต</span><span>ดัชนีสุขภาพการเงิน <b id="gameScore">--</b>/100</span><span>แข็งแรง</span>
             </div>
           </div>
         </div>
         <div style="margin-top:20px">
           <label style="font-size:13px;color:var(--muted)">ระดับการใช้จ่ายต่อเดือน: <b id="gameSpendVal" style="color:var(--accent-d)">100%</b></label>
           <input id="spendSlider" type="range" min="60" max="200" step="5" value="100" oninput="runForecastGame()" style="width:100%;accent-color:var(--accent);margin-top:8px;cursor:pointer">
-          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted)"><span>🌱 ประหยัด 60%</span><span>Actual 100%</span><span>🔥 เปลือง 200%</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted)"><span>ลดค่าใช้จ่าย 60%</span><span>ตามจริง 100%</span><span>เพิ่มค่าใช้จ่าย 200%</span></div>
           <div id="gameSpendBaht" style="font-size:13px;margin-top:10px;text-align:center"></div>
         </div>
         <div class="chartbox" style="height:230px;margin-top:14px;box-shadow:none;border:1px dashed var(--line);padding:10px"><canvas id="gameChart"></canvas></div>
       </div>
     </div>
 
-    <div class="row">
-      <div class="chartbox"><canvas id="ovPaint"></canvas></div>
-      <div class="chartbox"><canvas id="ovExp"></canvas></div>
+    <div class="section"><h2>โครงสร้างต้นทุนและค่าใช้จ่าย ${tip('สัดส่วนต้นทุนการผลิต + แนวโน้มค่าสี + ค่าใช้จ่ายต่อยอดขาย')}</h2>
+      <div class="row">
+        <div class="chartbox"><canvas id="costPie"></canvas></div>
+        <div class="chartbox"><canvas id="ovPaint"></canvas></div>
+      </div>
+      <div class="chartbox" style="margin-top:14px"><canvas id="ovExp"></canvas></div>
     </div>
 
-    <div class="section" style="margin-top:28px"><h2>พยากรณ์เงินสด 13 สัปดาห์ ${tip('มองเงินสดรายสัปดาห์ 1 ไตรมาส แบบ direct method (เงินที่ขยับจริง)')}</h2>
-      ${firstNeg?`<div class="alert">⚠ เงินสดอาจติดลบในสัปดาห์ที่ <b>${firstNeg}</b> — ควรเร่งเก็บลูกหนี้หรือเลื่อนจ่ายเจ้าหนี้</div>`:'<div class="card card-green">✓ ใน 13 สัปดาห์ข้างหน้า เงินสดไม่ติดลบ</div>'}
-      <div class="chartbox" style="margin-top:14px"><canvas id="fc13"></canvas></div>
-    </div>
-    <div class="section"><h2>พยากรณ์ระยะยาว 18 เดือน — รอดหรือล่มจม? ${tip('ฉาย 3 ฉากทัศน์จากกระแสเงินสดเฉลี่ย')}</h2>
-      <div class="scenario-leg">
-        <span><i class="swatch" style="background:#9a6a43"></i>Base (ปัจจุบัน)</span>
-        <span><i class="swatch" style="background:#4aa478"></i>ดีขึ้น (เก็บเร็ว/คุมต้นทุน)</span>
-        <span><i class="swatch" style="background:#d4694c"></i>แย่ลง (เก็บช้า/ต้นทุนพุ่ง)</span>
-      </div>
-      <div class="grid cards" style="margin-bottom:14px">
-        ${card('ฉากปัจจุบัน (Base)', 'ถ้าใช้จ่ายแบบเดิม', lr.base.depletion_month?('เงินหมด '+lr.base.depletion_month):'รอด','', lr.base.depletion_month?'red':'green')}
-        ${card('ฉากดีขึ้น','รับเร็วขึ้น 10% / จ่ายลด 10%', lr.optimistic.depletion_month?('เงินหมด '+lr.optimistic.depletion_month):'รอด','', lr.optimistic.depletion_month?'yellow':'green')}
-        ${card('ฉากแย่ลง','รับช้าลง / ต้นทุนพุ่ง 15%', lr.pessimistic.depletion_month?('เงินหมด '+lr.pessimistic.depletion_month):'รอด','', lr.pessimistic.depletion_month?'red':'yellow')}
-      </div>
-      <div class="chartbox"><canvas id="fcLong"></canvas></div>
-    </div>
     <div class="section"><h2>งบประมาณ vs จริง — ${bud.period} ${tip('Variance = จริง − งบ; รายจ่ายต่ำกว่างบ = ดี, รายรับเกินงบ = ดี')}</h2>
+      <div class="chartbox" style="margin-bottom:14px"><canvas id="budBar"></canvas></div>
       <div class="card"><table><thead><tr><th>หมวด</th><th>ประเภท</th><th>งบ</th><th>จริง</th><th>ส่วนต่าง</th><th>%</th><th></th></tr></thead><tbody>
       ${bud.rows.length?bud.rows.map(x=>`<tr><td>${catTH(x.category)}</td><td>${x.type==='revenue'?'รายรับ':'รายจ่าย'}</td><td>${baht(x.budget_satang)}</td><td>${baht(x.actual_satang)}</td><td style="color:var(--${x.status})">${baht(x.variance_satang)}</td><td>${pct(x.variance_pct)}</td><td>${pill(x.status)}</td></tr>`).join(''):'<tr><td colspan=7 class="muted">ยังไม่มีงบสำหรับเดือนนี้ — เพิ่มผ่านแท็บนำเข้าข้อมูล (entity: budgets)</td></tr>'}
       </tbody></table></div>
     </div>
   `);
+  mkChart('costPie',{type:'doughnut',data:{labels:['วัตถุดิบ (ไม้+ฮาร์ดแวร์)','สี (Paint)','ค่าแรงทางตรง (DL)','โสหุ้ยการผลิต (OH)'],datasets:[{data:[rawMat,paintC,dl,oh].map(v=>v/100),backgroundColor:['#9a6a43','#d4694c','#5a9d77','#c9aa63']}]},options:chartOpts('สัดส่วนต้นทุนการผลิต (COGS)')});
   mkChart('ovPaint',{type:'line',data:{labels:p.trend.map(t=>t.month),datasets:[{label:'ค่าสีต่อเดือน (บาท)',data:p.trend.map(t=>t.paint_satang/100),borderColor:'#d4694c',backgroundColor:'rgba(212,105,76,.12)',fill:true,tension:.3}]},options:chartOpts('แนวโน้มต้นทุนค่าสี')});
   const e = d.expense_to_sales.rows.slice(0,6);
   mkChart('ovExp',{type:'bar',data:{labels:e.map(x=>catTH(x.category)),datasets:[{label:'% ของยอดขาย',data:e.map(x=>x.pct_of_sales),backgroundColor:'#5a9d77'}]},options:chartOpts('ค่าใช้จ่ายต่อยอดขาย (รายหมวด)')});
-  mkChart('fc13',{type:'bar',data:{labels:w.weeks.map(x=>'W'+x.week),datasets:[
-    {label:'รับเข้า',data:w.weeks.map(x=>x.inflow_satang/100),backgroundColor:'#4aa478',stack:'f'},
-    {label:'จ่ายออก',data:w.weeks.map(x=>-x.outflow_satang/100),backgroundColor:'#d4694c',stack:'f'},
-    {type:'line',label:'เงินสดคงเหลือ',data:w.weeks.map(x=>x.balance_satang/100),borderColor:'#3f7d5c',backgroundColor:'#3f7d5c',tension:.2,yAxisID:'y'}
-  ]},options:chartOpts('กระแสเงินสดรายสัปดาห์ + ยอดคงเหลือ')});
   mkChart('fcLong',{type:'line',data:{labels:lr.base.series.map(x=>x.month),datasets:[
-    {label:'Base',data:lr.base.series.map(x=>x.balance_satang/100),borderColor:'#9a6a43',tension:.2},
-    {label:'ดีขึ้น',data:lr.optimistic.series.map(x=>x.balance_satang/100),borderColor:'#4aa478',tension:.2},
-    {label:'แย่ลง',data:lr.pessimistic.series.map(x=>x.balance_satang/100),borderColor:'#d4694c',tension:.2}
-  ]},options:chartOpts('แนวโน้มเงินสด 18 เดือน (เส้น 0 = เงินหมด)')});
+    {label:'Base case',data:lr.base.series.map(x=>x.balance_satang/100),borderColor:'#9a6a43',tension:.2},
+    {label:'Best case',data:lr.optimistic.series.map(x=>x.balance_satang/100),borderColor:'#4aa478',tension:.2},
+    {label:'Worst case',data:lr.pessimistic.series.map(x=>x.balance_satang/100),borderColor:'#d4694c',tension:.2}
+  ]},options:chartOpts('แนวโน้มเงินสด '+FCHORIZON+' เดือน (เส้น 0 = เงินหมด)')});
+  mkChart('budBar',{type:'bar',data:{labels:bud.rows.map(x=>catTH(x.category)),datasets:[
+    {label:'งบประมาณ',data:bud.rows.map(x=>x.budget_satang/100),backgroundColor:'#c9aa63'},
+    {label:'ใช้จริง',data:bud.rows.map(x=>x.actual_satang/100),backgroundColor:'#5a9d77'}
+  ]},options:chartOpts('งบประมาณ vs ใช้จริง (รายหมวด)')});
   runForecastGame();
 }
 
@@ -478,6 +559,89 @@ async function tabPayroll(){
   mkChart('paySplit',{type:'doughnut',data:{labels:['ประจำ','พาร์ทไทม์'],datasets:[{data:[s.ft_gross_satang/100,s.pt_gross_satang/100],backgroundColor:['#2f6b4c','#9a6a43']}]},options:chartOpts('สัดส่วนค่าจ้าง ประจำ vs พาร์ทไทม์')});
 }
 
+// ── เฟส 2: ตารางข้อมูล + Inventory Detail/Aging ─────────────
+const fmtCell=(key,val)=> val==null?'<span class="muted">-</span>' : (/_satang$/.test(key)?baht(val):String(val));
+function dataTable(rows){
+  if(!rows||!rows.length) return '<div class="muted" style="padding:14px">ไม่มีข้อมูลในช่วงที่เลือก</div>';
+  const cols=Object.keys(rows[0]);
+  return `<div style="overflow:auto"><table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>
+    ${rows.map(r=>`<tr>${cols.map(c=>`<td>${fmtCell(c,r[c])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+async function loadDataTable(){
+  const box=document.getElementById('dataTableBox'); if(!box) return;
+  box.innerHTML='<div class="loading">กำลังโหลด…</div>';
+  try{ const d=await api(`/table/${state.dataEntity}?from=${state.from}&to=${state.to}`);
+    box.innerHTML=dataTable(d.rows);
+    document.getElementById('dataMeta').textContent=`${d.count} แถว`+(d.date_col?` · กรอง ${d.date_col} ช่วง ${state.from} ถึง ${state.to}`:' · (ชุดนี้ไม่มีคอลัมน์วันที่ จึงไม่กรองช่วง)');
+  }catch(e){ box.innerHTML=`<div class="alert">${e.message}</div>`; }
+}
+async function tabData(){
+  const ents=[['invoices','ใบแจ้งหนี้ (ลูกหนี้)'],['bills','บิลเจ้าหนี้'],['expenses','ค่าใช้จ่าย'],['cash_transactions','เงินสดเข้า-ออก'],['jobs','งาน/ใบสั่งผลิต'],['job_costs','ต้นทุนงาน'],['inventory_items','รายการสต็อก'],['inventory_movements','การเคลื่อนไหวสต็อก'],['payslips','สลิปเงินเดือน'],['budgets','งบประมาณ'],['customers','ลูกค้า'],['suppliers','ซัพพลายเออร์']];
+  setMain(`
+    <div class="section"><h2>ข้อมูล (ตาราง) ${tip('ดูข้อมูลดิบในระบบ เลือกชุดข้อมูล + กรองตามช่วงวันที่ (มุมขวาบน) สำหรับตารางที่มีคอลัมน์วันที่')}</h2>
+      <div class="card" style="margin-bottom:14px">
+        <label style="font-size:13px;color:var(--muted)">เลือกชุดข้อมูล&nbsp;
+          <select id="dataEnt" style="background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:7px;border-radius:8px;font-family:var(--font)">
+            ${ents.map(([v,l])=>`<option value="${v}" ${v===state.dataEntity?'selected':''}>${l}</option>`).join('')}
+          </select>
+        </label>
+        <span class="muted" id="dataMeta" style="margin-left:10px;font-size:12px"></span>
+      </div>
+      <div class="card" id="dataTableBox"></div>
+    </div>
+  `);
+  document.getElementById('dataEnt').onchange=(e)=>{ state.dataEntity=e.target.value; loadDataTable(); };
+  loadDataTable();
+}
+
+async function tabInvDetail(){
+  const d=await api('/inventory'); const items=d.items, val=d.value;
+  const abcMap={}; (d.abc||[]).forEach(x=>abcMap[x.item_id]=x.abc_class);
+  setMain(`
+    <div class="section"><h2>รายละเอียดสต็อก ${tip('มูลค่าและสถานะวัตถุดิบทุกรายการ — สต็อกคือเงินที่จมอยู่')}</h2>
+      <div class="grid cards">
+        ${card('มูลค่าสต็อกรวม','เงินที่อยู่ในรูปวัตถุดิบ', baht(val.total_satang),'', null)}
+        ${card('มูลค่าสี','', baht(val.by_category.paint||0),'', null)}
+        ${card('มูลค่าไม้','', baht(val.by_category.wood||0),'', null)}
+        ${card('มูลค่าฮาร์ดแวร์','', baht(val.by_category.hardware||0),'', null)}
+      </div>
+      <div class="card" style="margin-top:14px"><div style="overflow:auto"><table>
+        <thead><tr><th>รายการ</th><th>หมวด</th><th>ตำแหน่ง</th><th>คงเหลือ</th><th>ต้นทุน/หน่วย</th><th>มูลค่า</th><th>ROP</th><th>Safety</th><th>Lead</th><th>ABC</th></tr></thead>
+        <tbody>${items.map(it=>{const value=Math.round((it.qty_on_hand||0)*(it.unit_cost_satang||0)); const low=it.reorder_point>0&&it.qty_on_hand<=it.reorder_point; const ab=abcMap[it.id]; return `<tr>
+          <td>${it.name}</td><td>${catTH(it.category)}</td><td>${it.bin_location||'-'}</td>
+          <td style="${low?'color:var(--red);font-weight:600':''}">${it.qty_on_hand} ${it.unit||''}${low?' ⚠':''}</td>
+          <td>${baht(it.unit_cost_satang)}</td><td><b>${baht(value)}</b></td>
+          <td>${it.reorder_point}</td><td>${it.safety_stock}</td><td>${it.lead_time_days} วัน</td>
+          <td>${ab?`<span class="pill pill-${ab==='A'?'red':ab==='B'?'yellow':'green'}">${ab}</span>`:'-'}</td>
+        </tr>`;}).join('')}</tbody>
+      </table></div></div>
+    </div>
+  `);
+}
+
+const bucketTH=(b)=>({d0_30:'0–30 วัน',d31_60:'31–60 วัน',d61_90:'61–90 วัน',d91_180:'91–180 วัน',d180_plus:'เกิน 180 วัน'}[b]||b);
+async function tabInvAging(){
+  const d=await api('/inventory'); const ag=d.aging, b=ag.buckets;
+  setMain(`
+    <div class="section"><h2>อายุสต็อก (Inventory Aging) ${tip('มูลค่าสต็อกแยกตามจำนวนวันที่ไม่มีการเบิกใช้ — ค้างนาน = เงินจม เสี่ยงเป็นของตาย')}</h2>
+      <div class="grid cards">
+        ${card('0–30 วัน','ของหมุนเวียนปกติ', baht(b.d0_30),'', 'green')}
+        ${card('31–60 วัน','', baht(b.d31_60),'', 'green')}
+        ${card('61–90 วัน','เริ่มช้า', baht(b.d61_90),'', 'yellow')}
+        ${card('91–180 วัน','ค้างนาน', baht(b.d91_180),'', 'yellow')}
+        ${card('เกิน 180 วัน','เสี่ยงเป็นของตาย', baht(b.d180_plus),'', b.d180_plus>0?'red':'green')}
+        ${card('มูลค่าสต็อกรวม','', baht(b.total),'', null)}
+      </div>
+      <div class="chartbox" style="margin-top:14px"><canvas id="invAgeChart"></canvas></div>
+      <div class="card" style="margin-top:14px"><div style="overflow:auto"><table>
+        <thead><tr><th>รายการ</th><th>หมวด</th><th>ไม่เคลื่อนไหว(วัน)</th><th>คงเหลือ</th><th>มูลค่า</th><th>ช่วงอายุ</th></tr></thead>
+        <tbody>${ag.rows.map(r=>`<tr><td>${r.name}</td><td>${catTH(r.category)}</td><td>${r.idle_days??'ไม่เคยเบิก'}</td><td>${r.qty_on_hand} ${r.unit||''}</td><td>${baht(r.value_satang)}</td><td>${bucketTH(r.bucket)}</td></tr>`).join('')}</tbody>
+      </table></div></div>
+    </div>
+  `);
+  mkChart('invAgeChart',{type:'bar',data:{labels:['0-30','31-60','61-90','91-180','180+'],datasets:[{label:'มูลค่าสต็อก (บาท)',data:[b.d0_30,b.d31_60,b.d61_90,b.d91_180,b.d180_plus].map(v=>v/100),backgroundColor:['#4aa478','#7cb295','#dca03a','#e0853a','#d4694c']}]},options:chartOpts('มูลค่าสต็อกแยกตามอายุ')});
+}
+
 async function tabCCC(){
   const d = await api('/aging'); const c=d.ccc;
   setMain(`
@@ -522,11 +686,184 @@ async function tabABC(){
   `);
 }
 
+// ── เฟส 4: BOM / เครื่องคำนวณราคาขาย (client-side) ──────────
+function bomOut(label,id,color){return `<div class="card" style="padding:12px"><h3 style="margin-bottom:2px">${label}</h3><div class="big" style="font-size:20px;${color?'color:var(--'+color+')':''}" id="${id}">—</div></div>`;}
+function runBOM(){
+  const g=id=>parseFloat(document.getElementById(id).value)||0;
+  const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=v;};
+  const qty=Math.max(1,g('bomQty'));
+  const wood=g('bomWood'), paint=g('bomPaint'), hw=g('bomHw'), labor=g('bomLabor'), other=g('bomOther');
+  const directCost=wood+paint+hw+labor;
+  const overhead=Math.round(directCost*g('bomOhPct')/100);
+  const totalCost=directCost+overhead+other;
+  let margin=g('bomMargin'); if(margin>=95) margin=95; if(margin<0) margin=0;
+  const price=margin>0?Math.round(totalCost/(1-margin/100)):totalCost;
+  const profit=price-totalCost;
+  const markup=totalCost>0?(profit/totalCost*100):0;
+  const vat=document.getElementById('bomVat').checked;
+  set('bomOutCost', bahtN(totalCost));
+  set('bomOutCostUnit', bahtN(totalCost/qty));
+  set('bomOutOh', bahtN(overhead));
+  set('bomOutPrice', bahtN(price));
+  set('bomOutPriceUnit', bahtN(price/qty));
+  set('bomOutProfit', bahtN(profit));
+  set('bomOutMarkup', markup.toFixed(1)+'%');
+  set('bomOutVat', vat?bahtN(Math.round(price*1.07)):'ไม่คิด');
+  const paintPct=totalCost>0?(paint/totalCost*100):0;
+  const warn=document.getElementById('bomPaintWarn');
+  if(warn) warn.innerHTML = paintPct>25?`<span style="color:var(--red)">⚠ ค่าสีคิดเป็น ${paintPct.toFixed(0)}% ของต้นทุน — สูงผิดปกติ ควรตรวจสอบ/ต่อรองซัพ</span>`:`ค่าสีคิดเป็น ${paintPct.toFixed(0)}% ของต้นทุนงานนี้`;
+  // ถ้าตั้งราคาโดยลืมโสหุ้ย+ค่าใช้จ่ายอื่น จะตั้งต่ำไปเท่าไร
+  const naivePrice=margin>0?Math.round(directCost/(1-margin/100)):directCost;
+  const miss=price-naivePrice; const missEl=document.getElementById('bomMiss');
+  if(missEl) missEl.innerHTML = miss>0?`💡 ถ้าตั้งราคาโดยคิดแต่ต้นทุนทางตรง (ลืมโสหุ้ย/ค่าใช้จ่ายอื่น ${bahtN(overhead+other)}) จะตั้งราคาต่ำไป <b>${bahtN(miss)}</b> ต่องาน — กำไรหายทันที`:'';
+  mkChart('bomChart',{type:'doughnut',data:{labels:['ไม้','สี','ฮาร์ดแวร์','ค่าแรง','โสหุ้ย','อื่นๆ'],datasets:[{data:[wood,paint,hw,labor,overhead,other],backgroundColor:['#9a6a43','#d4694c','#c9aa63','#5a9d77','#7cb295','#b0a48f']}]},options:chartOpts('โครงสร้างต้นทุนงานนี้')});
+}
+function tabBOM(){
+  setMain(`
+    <div class="section"><h2>BOM & คำนวณราคาขาย (Pricing Calculator) ${tip('ใส่ต้นทุนจริงทุกส่วน + กำไรที่ต้องการ → ระบบคำนวณราคาขายที่ควรตั้ง กันลืมต้นทุนแล้วกำไรหาย')}</h2>
+      <div class="row">
+        <div class="card" style="flex:1;min-width:320px">
+          <h3>ข้อมูลงาน &amp; ต้นทุน (หน่วย: บาท)</h3>
+          <div class="form-grid">
+            <label>ชื่องาน<input id="bomName" type="text" placeholder="เช่น ประตูไม้สัก 20 บาน" /></label>
+            <label>จำนวนบาน<input id="bomQty" type="number" value="20" min="1" oninput="runBOM()" /></label>
+            <label>ค่าไม้<input id="bomWood" type="number" value="120000" oninput="runBOM()" /></label>
+            <label>ค่าสี<input id="bomPaint" type="number" value="82000" oninput="runBOM()" /></label>
+            <label>ค่าฮาร์ดแวร์<input id="bomHw" type="number" value="22000" oninput="runBOM()" /></label>
+            <label>ค่าแรงทางตรง<input id="bomLabor" type="number" value="45000" oninput="runBOM()" /></label>
+            <label>โสหุ้ย (% ของต้นทุนทางตรง)<input id="bomOhPct" type="number" value="15" oninput="runBOM()" /></label>
+            <label>ค่าใช้จ่ายอื่น<input id="bomOther" type="number" value="0" oninput="runBOM()" /></label>
+            <label>กำไรที่ต้องการ (% ของราคาขาย)<input id="bomMargin" type="number" value="25" oninput="runBOM()" /></label>
+            <label style="flex-direction:row;align-items:center;gap:6px"><input id="bomVat" type="checkbox" oninput="runBOM()" /> คิด VAT 7%</label>
+          </div>
+          <div id="bomPaintWarn" class="muted" style="font-size:12px;margin-top:10px"></div>
+        </div>
+        <div class="card" style="flex:1;min-width:320px">
+          <h3>ผลลัพธ์</h3>
+          <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">
+            ${bomOut('ต้นทุนรวมทั้งงาน','bomOutCost')}
+            ${bomOut('ต้นทุนต่อบาน','bomOutCostUnit')}
+            ${bomOut('โสหุ้ย (คำนวณ)','bomOutOh')}
+            ${bomOut('Markup','bomOutMarkup')}
+            ${bomOut('💰 ราคาขายแนะนำ (ทั้งงาน)','bomOutPrice','green')}
+            ${bomOut('ราคาขายต่อบาน','bomOutPriceUnit','green')}
+            ${bomOut('กำไรที่ได้','bomOutProfit')}
+            ${bomOut('ราคารวม VAT 7%','bomOutVat')}
+          </div>
+          <div id="bomMiss" class="alert" style="margin-top:12px;font-size:13px;display:block"></div>
+          <div class="chartbox" style="height:230px;margin-top:12px;box-shadow:none;border:1px dashed var(--line)"><canvas id="bomChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+  `);
+  runBOM();
+}
+
+async function tabFinancials(){
+  const d=await api('/financials'); const is=d.income_statement, bs=d.balance_sheet;
+  const row=(label,val,o={})=>`<tr style="${o.bold?'font-weight:700;border-top:2px solid var(--line)':''}"><td style="${o.indent?'padding-left:22px;color:var(--muted)':''}">${label}${o.dummy?' <span class="pill pill-yellow">สมมติ</span>':''}</td><td style="text-align:right;${o.color?'color:var(--'+o.color+')':''}">${baht(val)}</td></tr>`;
+  setMain(`
+    <div class="section"><h2>งบกำไรขาดทุน (Income Statement) ${tip('รายได้/ต้นทุน/ค่าใช้จ่าย คำนวณจากข้อมูลจริง — ค่าเสื่อม ดอกเบี้ย ภาษี เป็นค่าสมมติ')}</h2>
+      <div class="card"><table><tbody>
+        ${row('รายได้ (Revenue)', is.revenue, {bold:true})}
+        ${row('หัก: ต้นทุนขาย (COGS)', -is.cogs, {indent:true})}
+        ${row('กำไรขั้นต้น (Gross Profit)', is.gross_profit, {bold:true, color:is.gross_profit>0?'green':'red'})}
+        ${Object.entries(is.opex_by_cat).map(([k,v])=>row('หัก: '+catTH(k), -v, {indent:true})).join('')}
+        ${row('กำไรก่อนดอกเบี้ย-ภาษี-ค่าเสื่อม (EBITDA)', is.ebitda, {bold:true})}
+        ${row('หัก: ค่าเสื่อมราคา', -is.depreciation, {indent:true, dummy:true})}
+        ${row('กำไรจากการดำเนินงาน (EBIT)', is.ebit, {bold:true})}
+        ${row('หัก: ดอกเบี้ยจ่าย', -is.interest, {indent:true, dummy:true})}
+        ${row('กำไรก่อนภาษี (EBT)', is.ebt, {bold:true})}
+        ${row('หัก: ภาษีเงินได้ (20%)', -is.tax, {indent:true, dummy:true})}
+        ${row('กำไรสุทธิ (Net Profit)', is.net_profit, {bold:true, color:is.net_profit>0?'green':'red'})}
+      </tbody></table>
+      <div class="muted" style="font-size:12px;margin-top:10px">อัตรากำไรสุทธิ ${pct(is.net_margin_pct)} · อัตรากำไรขั้นต้น ${pct(is.gross_margin_pct)}</div></div>
+    </div>
+    <div class="section"><h2>งบดุล (Balance Sheet) ${tip('สินทรัพย์/หนี้สินจากข้อมูลจริง — ส่วนของเจ้าของคำนวณให้สมดุล')}</h2>
+      <div class="row">
+        <div class="card"><h3>สินทรัพย์ (Assets)</h3><table><tbody>
+          ${row('เงินสดและรายการเทียบเท่า', bs.assets.cash, {indent:true})}
+          ${row('ลูกหนี้การค้า (AR)', bs.assets.ar, {indent:true})}
+          ${row('สินค้าคงคลัง', bs.assets.inventory, {indent:true})}
+          ${row('รวมสินทรัพย์หมุนเวียน', bs.assets.current_total, {bold:true})}
+          ${row('สินทรัพย์ถาวร (สุทธิ)', bs.assets.fixed, {indent:true, dummy:true})}
+          ${row('รวมสินทรัพย์', bs.assets.total, {bold:true, color:'green'})}
+        </tbody></table></div>
+        <div class="card"><h3>หนี้สิน + ส่วนของเจ้าของ</h3><table><tbody>
+          ${row('เจ้าหนี้การค้า (AP)', bs.liabilities.ap, {indent:true})}
+          ${row('เงินกู้ระยะสั้น', bs.liabilities.short_loan, {indent:true, dummy:true})}
+          ${row('รวมหนี้สินหมุนเวียน', bs.liabilities.current_total, {bold:true})}
+          ${row('หนี้สินระยะยาว', bs.liabilities.long_debt, {indent:true, dummy:true})}
+          ${row('รวมหนี้สิน', bs.liabilities.total, {bold:true})}
+          ${row('ทุนจดทะเบียน', bs.equity.paid_in, {indent:true, dummy:true})}
+          ${row('กำไรสะสม (คำนวณ)', bs.equity.retained, {indent:true})}
+          ${row('รวมส่วนของเจ้าของ', bs.equity.total, {bold:true})}
+          ${row('รวมหนี้สิน + ส่วนของเจ้าของ', bs.liabilities.total+bs.equity.total, {bold:true, color:'green'})}
+        </tbody></table></div>
+      </div>
+      <div class="muted" style="font-size:12px;margin-top:10px">${bs.balanced?'✓ งบดุลสมดุล (สินทรัพย์ = หนี้สิน + ส่วนของเจ้าของ)':'⚠ งบไม่สมดุล'} · รายการ <span class="pill pill-yellow">สมมติ</span> = ยังไม่มีข้อมูลจริง รอกรอกผ่าน Template (เฟส 5)</div>
+    </div>
+  `);
+}
+
+async function importExcel(file){
+  const msg=document.getElementById('xlsxMsg'); msg.textContent='กำลังอ่านไฟล์…';
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array',cellDates:true});
+    const source='excel_'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'');
+    const total={inserted:0,updated:0,skipped:0,sheets:0,errors:[]};
+    for(const sn of wb.SheetNames){            // ลำดับชีตในไฟล์ = ลำดับ dependency ที่ถูกต้องอยู่แล้ว
+      if(!ENTITIES.includes(sn)) continue;
+      const aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,blankrows:false,defval:null});
+      if(aoa.length<3) continue;               // แถว1=ไทย, แถว2=field, แถว3+=ข้อมูล
+      const keys=aoa[1];
+      const rows=aoa.slice(2).map(arr=>{const o={};keys.forEach((k,i)=>{if(k!=null&&String(k).trim()!==''){let v=arr[i]; if(v instanceof Date) v=v.toISOString().slice(0,10); o[String(k).trim()]=v;}});return o;})
+        .filter(o=>o.external_id!=null&&String(o.external_id).trim()!=='');
+      if(!rows.length) continue;
+      msg.textContent=`กำลังนำเข้า ${sn} (${rows.length} แถว)…`;
+      const r=await fetch('/api/import',{method:'POST',headers:{'Content-Type':'application/json',...authHdr()},body:JSON.stringify({source,entity:sn,rows})});
+      const j=await r.json();
+      if(j.ok){ total.inserted+=j.data.inserted; total.updated+=j.data.updated; total.skipped+=j.data.skipped; total.sheets++; if(j.data.errors&&j.data.errors.length) total.errors.push(...j.data.errors.map(e=>sn+': '+e.error)); }
+      else total.errors.push(sn+': '+j.error);
+    }
+    msg.innerHTML=`✓ นำเข้าเสร็จ — ${total.sheets} ชีต · เพิ่ม ${total.inserted} · แก้ ${total.updated} · ข้าม ${total.skipped}`+(total.errors.length?`<br><span style="color:var(--red)">ปัญหา ${total.errors.length} รายการ: ${total.errors.slice(0,3).join('; ')}</span>`:'<br>ดูประวัติได้ที่แท็บ "ประวัติ/เวอร์ชัน"');
+  }catch(e){ msg.textContent='ผิดพลาด: '+e.message; }
+}
+
+async function tabLog(){
+  const batches=await api('/import/batches');
+  setMain(`
+    <div class="section"><h2>ประวัติการนำเข้าข้อมูล / เวอร์ชัน ${tip('แต่ละครั้งที่อัปโหลด/นำเข้าข้อมูล = 1 เวอร์ชัน เก็บเวลาและจำนวนที่เพิ่ม/แก้ ดูย้อนหลังได้')}</h2>
+      <div class="card"><div style="overflow:auto"><table>
+        <thead><tr><th>เวอร์ชัน</th><th>เวลา</th><th>ชุดข้อมูล (source)</th><th>ประเภท</th><th>เพิ่ม</th><th>แก้</th><th>ข้าม</th><th></th></tr></thead>
+        <tbody>${batches.length?batches.map(b=>`<tr><td><b>v${b.id}</b></td><td>${b.created_at}</td><td>${b.source}</td><td>${b.entity}</td><td style="color:var(--green)">${b.inserted}</td><td>${b.updated}</td><td>${b.skipped?'<span style="color:var(--red)">'+b.skipped+'</span>':'0'}</td><td><button class="hz-btn" onclick="viewBatch(${b.id})">ดูรายการ</button></td></tr>`).join(''):'<tr><td colspan=8 class="muted">ยังไม่มีประวัติการนำเข้า — เริ่มที่แท็บ "นำเข้าข้อมูล"</td></tr>'}</tbody>
+      </table></div></div>
+      <div id="batchDetail" style="margin-top:14px"></div>
+    </div>
+  `);
+}
+async function viewBatch(id){
+  const box=document.getElementById('batchDetail'); box.innerHTML='<div class="loading">กำลังโหลด…</div>';
+  try{ const d=await api('/import/batch/'+id);
+    box.innerHTML=`<div class="card"><h3>รายการในเวอร์ชัน v${id} (${d.batch?d.batch.entity:''} · ${d.batch?d.batch.created_at:''})</h3>
+      <div style="overflow:auto"><table><thead><tr><th>#</th><th>external_id</th><th>สถานะ</th><th>ข้อผิดพลาด</th></tr></thead>
+      <tbody>${d.rows.map(r=>`<tr><td>${r.id}</td><td>${r.external_id||'-'}</td><td>${r.status==='ok'?'<span class="pill pill-green">ok</span>':'<span class="pill pill-red">error</span>'}</td><td class="muted">${r.error||''}</td></tr>`).join('')}</tbody></table></div></div>`;
+  }catch(e){ box.innerHTML=`<div class="alert">${e.message}</div>`; }
+}
+
 function tabImport(){
   setMain(`
     <div class="section"><h2>นำเข้าข้อมูล</h2>
-      <div class="card">
-        <p class="muted">กรอกข้อมูลทีละรายการ หรือให้ Python ETL ยิงเข้า <code>POST /api/import</code> ตาม <b>docs/IMPORT_CONTRACT.md</b></p>
+      <div class="card" style="border:1px solid var(--accent)">
+        <h3>① วิธีแนะนำ: กรอก Excel Template แล้วอัปโหลด</h3>
+        <p class="muted">ให้ผู้บริหารกรอกไฟล์ Template (มีคำอธิบายไทย + dropdown ครบทุกประเภทข้อมูล) แล้วอัปโหลดไฟล์ที่นี่ — ระบบอ่านทุกชีตอัตโนมัติ ยิงซ้ำได้ไม่เบิ้ลข้อมูล</p>
+        <a href="/WAYTHAI-FORYOU_Template.xlsx" download><button class="primary" type="button">⬇ ดาวน์โหลด Excel Template</button></a>
+        &nbsp;&nbsp; <input type="file" id="xlsxFile" accept=".xlsx" /> <button class="primary" id="xlsxUpload" type="button">อัปโหลดไฟล์ที่กรอกแล้ว</button>
+        <div id="xlsxMsg" class="muted" style="margin-top:10px;font-size:13px"></div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h3>② กรอกทีละรายการ (ด่วน)</h3>
         <div class="form-grid" id="impForm">
           <label>ชนิดข้อมูล (entity)
             <select id="impEntity">
@@ -542,14 +879,15 @@ function tabImport(){
         <div style="margin-top:14px"><button class="primary" id="impSave">บันทึก</button> <span id="impMsg" class="muted"></span></div>
       </div>
       <div class="card" style="margin-top:14px">
-        <h3>นำเข้าไฟล์ CSV</h3>
-        <p class="muted">เลือก entity แล้วเลือกไฟล์ CSV (หัวคอลัมน์ตาม IMPORT_CONTRACT)</p>
+        <h3>③ นำเข้าไฟล์ CSV (ทีละ entity)</h3>
+        <p class="muted">เลือก entity ด้านบน แล้วเลือกไฟล์ CSV (หัวคอลัมน์ตาม IMPORT_CONTRACT)</p>
         <input type="file" id="csvFile" accept=".csv" />
         <button class="primary" id="csvUpload">อัปโหลด CSV</button>
         <span id="csvMsg" class="muted"></span>
       </div>
     </div>
   `);
+  document.getElementById('xlsxUpload').onclick=()=>{ const f=document.getElementById('xlsxFile').files[0]; if(!f){document.getElementById('xlsxMsg').textContent='เลือกไฟล์ก่อน';return;} importExcel(f); };
   const fieldsByEntity={
     cash_transactions:[['account','บัญชี','text'],['direction','เข้า/ออก','dir'],['amount','จำนวนเงิน','number'],['txn_date','วันที่','date'],['category','หมวด','text']],
     invoices:[['customer_external_id','รหัสลูกค้า','text'],['issue_date','วันออกบิล','date'],['due_date','วันครบกำหนด','date'],['amount','จำนวนเงิน','number'],['amount_paid','ชำระแล้ว','number']],
@@ -571,7 +909,7 @@ function tabImport(){
     const ent=document.getElementById('impEntity').value;
     const row={}; document.querySelectorAll('#impFields [data-k]').forEach(el=>row[el.dataset.k]=el.value);
     document.getElementById('impMsg').textContent='กำลังบันทึก…';
-    try{ const r=await fetch('/api/manual/'+ent,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(row)}); const j=await r.json();
+    try{ const r=await fetch('/api/manual/'+ent,{method:'POST',headers:{'Content-Type':'application/json',...authHdr()},body:JSON.stringify(row)}); const j=await r.json();
       document.getElementById('impMsg').textContent=j.ok?'✓ บันทึกแล้ว':'ผิดพลาด: '+j.error;
     }catch(e){ document.getElementById('impMsg').textContent='ผิดพลาด: '+e.message; }
   };
@@ -581,7 +919,7 @@ function tabImport(){
     if(!f){ document.getElementById('csvMsg').textContent='เลือกไฟล์ก่อน'; return; }
     const text=await f.text();
     document.getElementById('csvMsg').textContent='กำลังอัปโหลด…';
-    try{ const r=await fetch('/api/import/csv?entity='+ent+'&source=csv_'+Date.now(),{method:'POST',headers:{'Content-Type':'text/csv'},body:text}); const j=await r.json();
+    try{ const r=await fetch('/api/import/csv?entity='+ent+'&source=csv_'+Date.now(),{method:'POST',headers:{'Content-Type':'text/csv',...authHdr()},body:text}); const j=await r.json();
       document.getElementById('csvMsg').textContent=j.ok?`✓ เพิ่ม ${j.data.inserted} แก้ ${j.data.updated} ข้าม ${j.data.skipped}`:'ผิดพลาด: '+j.error;
     }catch(e){ document.getElementById('csvMsg').textContent='ผิดพลาด: '+e.message; }
   };
@@ -622,6 +960,12 @@ document.getElementById('logoutBtn').onclick=logout;
 // ============================================================
 document.getElementById('asOf').value = state.asOf;
 document.getElementById('asOf').onchange = (e)=>{ state.asOf=e.target.value; route(); };
+// ช่วงวันที่ (ใช้กับแท็บข้อมูล/ตาราง) — ดีฟอลต์ตั้งแต่ต้นปีถึงวันที่ปัจจุบัน
+state.from = state.asOf.slice(0,4)+'-01-01'; state.to = state.asOf;
+const _df=document.getElementById('dateFrom'), _dt=document.getElementById('dateTo');
+_df.value=state.from; _dt.value=state.to;
+_df.onchange=(e)=>{ state.from=e.target.value; if(state.tab==='data') loadDataTable(); };
+_dt.onchange=(e)=>{ state.to=e.target.value; if(state.tab==='data') loadDataTable(); };
 document.querySelectorAll('#modeToggle button').forEach(b=> b.onclick=()=>{
   state.mode=b.dataset.mode;
   document.querySelectorAll('#modeToggle button').forEach(x=>x.classList.toggle('active',x===b));

@@ -101,7 +101,18 @@ app.post('/api/import/file', async (c) => {
 });
 
 app.get('/api/import/batches', async (c) =>
-  ok(c, await repo.all(c.env.DB, `SELECT * FROM import_batches ORDER BY id DESC LIMIT 50`)));
+  ok(c, await repo.all(c.env.DB, `SELECT * FROM import_batches ORDER BY id DESC LIMIT 100`)));
+
+// รายละเอียดของเวอร์ชัน/batch หนึ่ง (สำหรับแท็บ Log)
+app.get('/api/import/batch/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const batch = await repo.one(c.env.DB, `SELECT * FROM import_batches WHERE id = ?`, id);
+    const rows = await repo.all(c.env.DB,
+      `SELECT id, entity, external_id, status, error, created_at FROM import_rows WHERE batch_id = ? ORDER BY id LIMIT 500`, id);
+    return ok(c, { batch, rows });
+  } catch (e) { return err(c, e); }
+});
 
 // ---------- DASHBOARD สรุป (หน้าแรก เจ้าของถามบ่อย) ----------
 app.get('/api/summary', async (c) => {
@@ -201,10 +212,11 @@ app.get('/api/forecast', async (c) => {
       openingCashSatang: runway.cash_satang, invoices, bills,
       recurringWeeklySatang: Math.round(runway.avg_outflow_satang / 4.33), asOf,
     });
+    const months = Math.max(1, Math.min(60, +c.req.query('months') || 18));
     const longRange = A.longRangeForecast({
       openingCashSatang: runway.cash_satang,
       avgMonthlyInflow: runway.avg_inflow_satang, avgMonthlyOutflow: runway.avg_outflow_satang,
-      months: 18, asOf,
+      months, asOf,
     });
     return ok(c, { runway, thirteen_week: week13, long_range: longRange });
   } catch (e) { return err(c, e, 500); }
@@ -229,6 +241,7 @@ app.get('/api/inventory', async (c) => {
       value: A.inventoryValue(items),
       reorder_alerts: A.reorderAlerts(items),
       dead_stock: A.deadStock(items, movements, asOf),
+      aging: A.inventoryAging(items, movements, asOf),
       abc: A.abcAnalysis(items, movements, asOf),
       items,
     });
@@ -253,6 +266,39 @@ app.get('/api/payroll', async (c) => {
 });
 function state_default_period() { return new Date().toISOString().slice(0, 7); }
 
+// ---------- FINANCIAL STATEMENTS (งบการเงิน: จริง + dummy) ----------
+app.get('/api/financials', async (c) => {
+  try {
+    const db = c.env.DB;
+    const [jobCosts, expenses, cashTxns] = await Promise.all([
+      repo.getJobCosts(db), repo.getExpenses(db), repo.getCashTxns(db),
+    ]);
+    const revenue = await repo.getTotalRevenue(db);
+    const cogs = A.cogsBreakdown(jobCosts);
+    const cash = A.cashOnHand(cashTxns).total_satang;
+    const ar = await repo.getOutstandingAR(db);
+    const ap = await repo.getOutstandingAP(db);
+    const inv = await repo.getInventoryTotalValue(db);
+    // ค่าสมมติ (ยังไม่มีข้อมูลจริง) — หน่วยสตางค์
+    const DUMMY = {
+      fixedAssetsSatang: 500000000, shortLoanSatang: 100000000, longDebtSatang: 200000000,
+      paidInCapitalSatang: 100000000, depreciationSatang: 20000000, interestSatang: 8000000,
+    };
+    return ok(c, {
+      income_statement: A.incomeStatement({
+        revenueSatang: revenue, cogs, expenses,
+        depreciationSatang: DUMMY.depreciationSatang, interestSatang: DUMMY.interestSatang, taxRate: 0.20,
+      }),
+      balance_sheet: A.balanceSheet({
+        cashSatang: cash, arSatang: ar, inventorySatang: inv, apSatang: ap,
+        fixedAssetsSatang: DUMMY.fixedAssetsSatang, shortLoanSatang: DUMMY.shortLoanSatang,
+        longDebtSatang: DUMMY.longDebtSatang, paidInCapitalSatang: DUMMY.paidInCapitalSatang,
+      }),
+      dummy_fields: ['สินทรัพย์ถาวร', 'เงินกู้ระยะสั้น', 'หนี้สินระยะยาว', 'ทุนจดทะเบียน', 'ค่าเสื่อมราคา', 'ดอกเบี้ยจ่าย'],
+    });
+  } catch (e) { return err(c, e, 500); }
+});
+
 // ---------- รายการดิบ (drill-down) ----------
 app.get('/api/list/:entity', async (c) => {
   try {
@@ -262,6 +308,30 @@ app.get('/api/list/:entity', async (c) => {
     const entity = c.req.param('entity');
     if (!allowed.includes(entity)) throw new Error('entity ไม่ถูกต้อง');
     return ok(c, await repo.all(c.env.DB, `SELECT * FROM ${entity} ORDER BY id DESC LIMIT 500`));
+  } catch (e) { return err(c, e); }
+});
+
+// ---------- ตารางข้อมูล + ช่วงวันที่ (Data table with date range) ----------
+const DATE_COL = {
+  invoices: 'issue_date', bills: 'issue_date', expenses: 'spent_at',
+  cash_transactions: 'txn_date', job_costs: 'incurred_at', jobs: 'started_at',
+  inventory_movements: 'moved_at', payslips: 'period',
+};
+app.get('/api/table/:entity', async (c) => {
+  try {
+    const allowed = ['customers', 'suppliers', 'jobs', 'job_costs', 'invoices', 'bills',
+      'inventory_items', 'inventory_movements', 'expenses', 'cash_transactions', 'budgets',
+      'employees', 'payslips'];
+    const entity = c.req.param('entity');
+    if (!allowed.includes(entity)) throw new Error('entity ไม่ถูกต้อง');
+    const from = c.req.query('from'), to = c.req.query('to');
+    const col = DATE_COL[entity];
+    let sql = `SELECT * FROM ${entity}`;
+    const binds = [];
+    if (col && from && to) { sql += ` WHERE ${col} BETWEEN ? AND ?`; binds.push(from, to); }
+    sql += ` ORDER BY id DESC LIMIT 1000`;
+    const rows = await repo.all(c.env.DB, sql, ...binds);
+    return ok(c, { entity, date_col: col || null, count: rows.length, rows });
   } catch (e) { return err(c, e); }
 });
 
@@ -280,3 +350,4 @@ app.post('/api/manual/:entity', async (c) => {
 app.all('*', (c) => c.env.ASSETS.fetch(c.req.raw));
 
 export default app;
+// end of worker
