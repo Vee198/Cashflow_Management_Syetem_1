@@ -313,7 +313,7 @@ async function tabOverview(){
   let monthsLeft=11-mo; if(monthsLeft<1) monthsLeft=12;
   const glabels=[]; for(let i=1;i<=monthsLeft;i++){ glabels.push(new Date(yr,mo+i,1).toISOString().slice(0,7)); }
   GAME={cash:r.cash_satang,inflow:r.avg_inflow_satang,outflow:r.avg_outflow_satang,monthsLeft,labels:glabels};
-  const eb=dash.expense_buckets.buckets;
+  const eb=dash.expense_buckets.buckets, ps=dash.production_split;
   const week13st=firstNeg?(firstNeg<=4?'red':'yellow'):'green';
 
   setMain(`
@@ -385,6 +385,15 @@ async function tabOverview(){
       </div>
     </div>
 
+    <div class="section"><h2>กำไรแยกตามแหล่งผลิต ${tip('แยกว่ากำไรมาจาก "ผลิตเอง" หรือ "ส่งซัพพลายเออร์ผลิต" — กำไร = ราคาขาย − ต้นทุนรวมของออเดอร์')}</h2>
+      <div class="grid cards">
+        ${card('กำไรผลิตเอง','งานที่ผลิตเอง: ราคาขาย − ต้นทุน (ค่าแรง+ไม้+สี+ส่ง)', baht(ps.self.profit), 'ยอดขาย '+baht(ps.self.revenue)+' · '+ps.self.count+' งาน · margin '+pct(ps.self_margin_pct), ps.self.profit>=0?'green':'red')}
+        ${card('กำไรสั่งซัพผลิต','งานที่ส่งซัพ: ราคาขาย − ที่จ่ายซัพ (+สี+ส่ง)', baht(ps.outsourced.profit), 'ยอดขาย '+baht(ps.outsourced.revenue)+' · '+ps.outsourced.count+' งาน · margin '+pct(ps.out_margin_pct), ps.outsourced.profit>=0?'green':'red')}
+        ${card('กำไรรวมจากงาน','ผลิตเอง + สั่งซัพ', baht(ps.total_profit),'', ps.total_profit>=0?'green':'red')}
+      </div>
+      ${ps.monthly.length?'<div class="chartbox" style="margin-top:14px"><canvas id="prodSplitChart"></canvas></div>':''}
+    </div>
+
     <div class="section"><h2>ยอดค้างรับรายลูกค้า ${tip('ลูกค้ารายไหนค้างจ่ายเท่าไร — คอลัมน์เลยกำหนด (แดง) = เลยวันครบกำหนดชำระแล้ว')}</h2>
       <div class="card"><div style="overflow:auto"><table><thead><tr><th>ลูกค้า</th><th>เบอร์โทร</th><th>ยอดค้างรับ</th><th>เลยกำหนด</th></tr></thead><tbody>
       ${dash.ar_by_customer.length?dash.ar_by_customer.map(x=>`<tr><td>${x.customer}</td><td>${x.phone||'-'}</td><td>${baht(x.outstanding_satang)}</td><td style="${x.overdue_satang>0?'color:var(--red);font-weight:600':''}">${x.overdue_satang>0?baht(x.overdue_satang):'-'}</td></tr>`).join(''):'<tr><td colspan=4 class="muted">ไม่มียอดค้างรับ 🎉</td></tr>'}
@@ -410,6 +419,10 @@ async function tabOverview(){
     {label:'ยอดขายจริง',data:sm.map(x=>x.actual_satang/100),backgroundColor:'#5a9d77'}
   ]},options:chartOpts('ยอดขายรายเดือน (จริง)')});
   mkChart('expBuckets',{type:'doughnut',data:{labels:['ต้นทุนผลิต','ค่าการตลาด','Ads','ค่าเช่า','โสหุ้ย/อื่นๆ'],datasets:[{data:[eb.production,eb.marketing,eb.ads,eb.rent,eb.overhead].map(v=>v/100),backgroundColor:['#9a6a43','#5a9d77','#d4694c','#c9aa63','#b0a48f']}]},options:chartOpts('ค่าใช้จ่ายแยกหมวดธุรกิจ')});
+  if(ps.monthly.length) mkChart('prodSplitChart',{type:'bar',data:{labels:ps.monthly.map(x=>x.month),datasets:[
+    {label:'กำไรผลิตเอง',data:ps.monthly.map(x=>x.self_profit/100),backgroundColor:'#5a9d77'},
+    {label:'กำไรสั่งซัพ',data:ps.monthly.map(x=>x.out_profit/100),backgroundColor:'#9a6a43'}
+  ]},options:chartOpts('กำไรรายเดือน: ผลิตเอง vs สั่งซัพ')});
   mkChart('fcLong',{type:'line',data:{labels:lr.base.series.map(x=>x.month),datasets:[
     {label:'Base case',data:lr.base.series.map(x=>x.balance_satang/100),borderColor:'#9a6a43',tension:.2},
     {label:'Best case',data:lr.optimistic.series.map(x=>x.balance_satang/100),borderColor:'#4aa478',tension:.2},

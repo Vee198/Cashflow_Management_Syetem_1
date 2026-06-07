@@ -22,6 +22,7 @@ const HANDLERS = {
       external_id: r.external_id, customer_external_id: custExt, description: r.description,
       quantity: r.quantity, quoted_price: r.total_price, status: r.status ?? 'in_progress',
       started_at: r.issue_date, promised_date: r.due_date,
+      production_type: r.production_type, total_cost: r.total_cost,
     }, source);
     const total = Number(r.total_price) || 0, dep = Number(r.deposit) || 0;
     const st = dep <= 0 ? 'open' : (dep >= total ? 'paid' : 'partial');
@@ -41,11 +42,13 @@ const HANDLERS = {
     const customer_id = await lookupId(db, 'customers', source, r.customer_external_id);
     return upsert(db, `jobs`,
       ['customer_id', 'description', 'quantity', 'quoted_price_satang', 'status', 'started_at', 'completed_at',
+       'production_type', 'total_cost_satang',
        'qty_ordered', 'qty_produced', 'qty_good', 'qty_scrap', 'qty_rework', 'promised_date', 'delivered_date'],
       source, r.external_id, {
         customer_id, description: r.description ?? null, quantity: r.quantity ?? 0,
         quoted_price_satang: baht(r.quoted_price), status: r.status ?? 'quote',
         started_at: r.started_at ?? null, completed_at: r.completed_at ?? null,
+        production_type: r.production_type ?? 'self', total_cost_satang: baht(r.total_cost),
         qty_ordered: r.qty_ordered ?? r.quantity ?? 0, qty_produced: r.qty_produced ?? 0,
         qty_good: r.qty_good ?? 0, qty_scrap: r.qty_scrap ?? 0, qty_rework: r.qty_rework ?? 0,
         promised_date: r.promised_date ?? null, delivered_date: r.delivered_date ?? null,

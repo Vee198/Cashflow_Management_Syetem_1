@@ -590,6 +590,32 @@ export function salesMonthly(invoices, budgets) {
   return months.map((m) => ({ month: m, actual_satang: actual[m] || 0, budget_satang: budget[m] || 0 }));
 }
 
+// กำไรแยกตามแหล่งผลิต: ผลิตเอง (self) vs สั่งซัพพลายเออร์ผลิต (outsourced)
+export function profitByProductionType(jobs) {
+  const blank = () => ({ revenue: 0, cost: 0, profit: 0, count: 0, doors: 0 });
+  const self_ = blank(), out = blank();
+  const monthly = {};
+  for (const j of jobs) {
+    const rev = j.quoted_price_satang || 0, cost = j.total_cost_satang || 0;
+    const isOut = j.production_type === 'outsourced';
+    const t = isOut ? out : self_;
+    t.revenue += rev; t.cost += cost; t.profit += rev - cost; t.count += 1; t.doors += j.quantity || 0;
+    const m = ym(j.started_at);
+    if (m) {
+      if (!monthly[m]) monthly[m] = { self_profit: 0, out_profit: 0 };
+      if (isOut) monthly[m].out_profit += rev - cost; else monthly[m].self_profit += rev - cost;
+    }
+  }
+  const months = Object.keys(monthly).sort();
+  return {
+    self: self_, outsourced: out,
+    total_profit: self_.profit + out.profit,
+    self_margin_pct: self_.revenue ? Math.round(safeDiv(self_.profit, self_.revenue) * 1000) / 10 : 0,
+    out_margin_pct: out.revenue ? Math.round(safeDiv(out.profit, out.revenue) * 1000) / 10 : 0,
+    monthly: months.map((m) => ({ month: m, ...monthly[m] })),
+  };
+}
+
 // ============================================================
 // K. Recommendation Engine + Customer Concentration (#15/#18)
 // ============================================================

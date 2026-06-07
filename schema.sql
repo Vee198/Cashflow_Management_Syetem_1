@@ -64,6 +64,9 @@ CREATE TABLE IF NOT EXISTS jobs (
   status              TEXT DEFAULT 'quote', -- quote|in_progress|done|delivered
   started_at          TEXT,
   completed_at        TEXT,
+  -- ── แหล่งผลิต + ต้นทุน (แยกผลิตเอง/สั่งซัพ) ──────────────────
+  production_type     TEXT DEFAULT 'self',  -- self = ผลิตเอง | outsourced = สั่งซัพพลายเออร์ผลิต
+  total_cost_satang   INTEGER DEFAULT 0,    -- ต้นทุนรวมของออเดอร์นี้ (ค่าแรง+ไม้+สี+ส่ง หรือ ยอดจ่ายซัพ+สี+ส่ง)
   -- ── Production analysis fields ──────────────────────────────
   qty_ordered         INTEGER DEFAULT 0,    -- จำนวนที่ลูกค้าสั่ง
   qty_produced        INTEGER DEFAULT 0,    -- จำนวนที่ผลิตจริง (รวมเสีย)

@@ -151,8 +151,8 @@ app.get('/api/dashboard', async (c) => {
   try {
     const db = c.env.DB;
     const asOf = asOfOf(c);
-    const [cashTxns, invoices, expenses, customers, budgets] = await Promise.all([
-      repo.getCashTxns(db), repo.getInvoices(db), repo.getExpenses(db), repo.getCustomers(db), repo.getBudgets(db),
+    const [cashTxns, invoices, expenses, customers, budgets, jobs] = await Promise.all([
+      repo.getCashTxns(db), repo.getInvoices(db), repo.getExpenses(db), repo.getCustomers(db), repo.getBudgets(db), repo.getJobs(db),
     ]);
     const cash = A.cashOnHand(cashTxns).total_satang;
     let billed = 0, received = 0;
@@ -169,6 +169,7 @@ app.get('/api/dashboard', async (c) => {
       expense_buckets: eb,
       ar_by_customer: A.arByCustomer(invoices, customers, asOf),
       sales_monthly: A.salesMonthly(invoices, budgets),
+      production_split: A.profitByProductionType(jobs),
     });
   } catch (e) { return err(c, e, 500); }
 });
