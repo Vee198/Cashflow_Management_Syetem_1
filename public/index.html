@@ -391,7 +391,7 @@ async function tabOverview(){
       </tbody></table></div></div>
     </div>
 
-    <div class="section"><h2>ยอดขาย & ค่าใช้จ่าย ${tip('ยอดขายรายเดือน ประมาณการ vs จริง + ค่าใช้จ่ายแยกหมวดธุรกิจ')}</h2>
+    <div class="section"><h2>ยอดขาย & ค่าใช้จ่าย ${tip('ยอดขายรายเดือน (จริง) + ค่าใช้จ่ายแยกหมวดธุรกิจ')}</h2>
       <div class="row">
         <div class="chartbox"><canvas id="salesMonthly"></canvas></div>
         <div class="chartbox"><canvas id="expBuckets"></canvas></div>
@@ -407,9 +407,8 @@ async function tabOverview(){
   `);
   const sm=dash.sales_monthly;
   mkChart('salesMonthly',{type:'bar',data:{labels:sm.map(x=>x.month),datasets:[
-    {label:'ประมาณการ (งบ)',data:sm.map(x=>x.budget_satang/100),backgroundColor:'#c9aa63'},
-    {label:'จริง',data:sm.map(x=>x.actual_satang/100),backgroundColor:'#5a9d77'}
-  ]},options:chartOpts('ยอดขายรายเดือน: ประมาณการ vs จริง')});
+    {label:'ยอดขายจริง',data:sm.map(x=>x.actual_satang/100),backgroundColor:'#5a9d77'}
+  ]},options:chartOpts('ยอดขายรายเดือน (จริง)')});
   mkChart('expBuckets',{type:'doughnut',data:{labels:['ต้นทุนผลิต','ค่าการตลาด','Ads','ค่าเช่า','โสหุ้ย/อื่นๆ'],datasets:[{data:[eb.production,eb.marketing,eb.ads,eb.rent,eb.overhead].map(v=>v/100),backgroundColor:['#9a6a43','#5a9d77','#d4694c','#c9aa63','#b0a48f']}]},options:chartOpts('ค่าใช้จ่ายแยกหมวดธุรกิจ')});
   mkChart('fcLong',{type:'line',data:{labels:lr.base.series.map(x=>x.month),datasets:[
     {label:'Base case',data:lr.base.series.map(x=>x.balance_satang/100),borderColor:'#9a6a43',tension:.2},

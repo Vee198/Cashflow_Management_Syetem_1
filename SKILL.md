@@ -317,7 +317,7 @@
 - **กำไรสุทธิ** = ยอดบิลรวม − ค่าใช้จ่ายทั้งหมด (`expenseBuckets`)
 - **arByCustomer** = ยอดค้างรับรายลูกค้า + ยอดเลยกำหนด (overdue)
 - **expenseBuckets** = จัดค่าใช้จ่ายเป็น ต้นทุนผลิต(paint/wood/hardware/labor) / การตลาด(marketing) / Ads / ค่าเช่า(rent) / โสหุ้ย(utility,overhead,transport,other)
-- **salesMonthly** = ยอดขายรายเดือน ประมาณการ(budget revenue) vs จริง(invoiced)
+- **salesMonthly** = ยอดขายรายเดือน (จริง/invoiced) — หน้า Overview แสดงเฉพาะยอดจริง (ฟังก์ชันยังคืน budget ไว้เผื่อใช้ภายหลัง)
 - **ภาษาคน:** "มีเงินจริงเท่าไร · ลูกค้าจ่ายมาแล้วเท่าไร · ยังค้างเท่าไร(ใครค้าง) · กำไรสุทธิเท่าไร · เงินไหลไปหมวดไหน"
 
 ---
