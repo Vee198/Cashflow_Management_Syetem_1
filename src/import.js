@@ -10,9 +10,27 @@ const baht = (v) => Math.round((Number(v) || 0) * 100); // บาท → สต�
 // map entity → ฟังก์ชัน upsert ทีละแถว (คืน 'inserted' | 'updated')
 const HANDLERS = {
   customers: async (db, r, source) =>
-    upsert(db, `customers`, ['name', 'credit_terms_days'], source, r.external_id, {
-      name: r.name, credit_terms_days: r.credit_terms_days ?? 30,
+    upsert(db, `customers`, ['name', 'phone', 'credit_terms_days'], source, r.external_id, {
+      name: r.name, phone: r.phone ?? null, credit_terms_days: r.credit_terms_days ?? 30,
     }),
+
+  // ── composite: 1 แถวออเดอร์ → สร้าง ลูกค้า + งาน + ใบแจ้งหนี้ (มัดจำ/ค้างรับ) ──
+  order: async (db, r, source) => {
+    const custExt = (r.phone && String(r.phone).trim()) ? 'PH-' + String(r.phone).trim() : 'CU-' + (r.customer_name || r.external_id);
+    await HANDLERS.customers(db, { external_id: custExt, name: r.customer_name || custExt, phone: r.phone }, source);
+    await HANDLERS.jobs(db, {
+      external_id: r.external_id, customer_external_id: custExt, description: r.description,
+      quantity: r.quantity, quoted_price: r.total_price, status: r.status ?? 'in_progress',
+      started_at: r.issue_date, promised_date: r.due_date,
+    }, source);
+    const total = Number(r.total_price) || 0, dep = Number(r.deposit) || 0;
+    const st = dep <= 0 ? 'open' : (dep >= total ? 'paid' : 'partial');
+    return HANDLERS.invoices(db, {
+      external_id: r.external_id, customer_external_id: custExt, job_external_id: r.external_id,
+      issue_date: r.issue_date, due_date: r.due_date || r.issue_date,
+      amount: r.total_price, amount_paid: r.deposit, status: st,
+    }, source);
+  },
 
   suppliers: async (db, r, source) =>
     upsert(db, `suppliers`, ['name', 'category'], source, r.external_id, {

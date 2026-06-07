@@ -146,6 +146,33 @@ app.get('/api/summary', async (c) => {
   } catch (e) { return err(c, e, 500); }
 });
 
+// ---------- DASHBOARD ลูกค้า (เงินสด/รับ/ค้างรับ + ค่าใช้จ่ายแยกหมวด) ----------
+app.get('/api/dashboard', async (c) => {
+  try {
+    const db = c.env.DB;
+    const asOf = asOfOf(c);
+    const [cashTxns, invoices, expenses, customers, budgets] = await Promise.all([
+      repo.getCashTxns(db), repo.getInvoices(db), repo.getExpenses(db), repo.getCustomers(db), repo.getBudgets(db),
+    ]);
+    const cash = A.cashOnHand(cashTxns).total_satang;
+    let billed = 0, received = 0;
+    for (const i of invoices) { if (i.status === 'void') continue; billed += i.amount_satang; received += (i.amount_paid_satang || 0); }
+    const eb = A.expenseBuckets(expenses);
+    return ok(c, {
+      as_of: asOf,
+      cash_on_hand_satang: cash,
+      received_satang: received,
+      outstanding_satang: billed - received,
+      billed_revenue_satang: billed,
+      net_profit_satang: billed - eb.total_satang,
+      runway: A.burnAndRunway(cashTxns, asOf, 3),
+      expense_buckets: eb,
+      ar_by_customer: A.arByCustomer(invoices, customers, asOf),
+      sales_monthly: A.salesMonthly(invoices, budgets),
+    });
+  } catch (e) { return err(c, e, 500); }
+});
+
 // ---------- CASH & LIQUIDITY ----------
 app.get('/api/cash', async (c) => {
   try {

@@ -129,19 +129,23 @@ npx wrangler deploy
 - **การ์ด KPI สื่อความหมายด้วยสี+เครื่องหมาย:** เขียว **✓** (ดี) / เหลือง **▲** (เฝ้าระวัง) / แดง **▼** (เสี่ยง) — เครื่องหมายอยู่หน้าตัวเลขในฟังก์ชัน `card()` ของ `public/index.html`; ใช้ +/− เฉพาะค่ากระแสเงินสด
 - **แท็บ:** ภาพรวม · **💡 คำแนะนำ** · เงินสด · อายุหนี้ · ต้นทุน&ค่าสี · **BOM/ตั้งราคา** · การผลิต · คลังสินค้า · **รายละเอียดสต็อก · อายุสต็อก** · เงินเดือน · **ข้อมูล (ตาราง) · ประวัติ/เวอร์ชัน** · [ขั้นสูง: วงจรเงินสด · กำไรรายงาน · ABC/ของตาย · **งบการเงิน**] · นำเข้าข้อมูล
 - **💡 ที่ปรึกษาการเงินอัตโนมัติ (Recommendation engine):** `/api/recommendations` + `A.recommendations(ctx)` — อ่าน KPI ทั้งหมด (ค่าสี/margin/DSO/AR90+/runway/scrap/ของตาย/ROP/OTD/OT/ลูกค้ากระจุก) แล้วจัดอันดับสิ่งที่ควรทำตามความรุนแรง + ผลกระทบเป็นเงิน + ผลต่อ Financial Score; รวม **Customer Concentration** (`A.customerConcentration()`)
-- **Excel Template (`public/WAYTHAI-FORYOU_Template.xlsx`):** ไฟล์กรอกข้อมูลให้ผู้บริหาร — 13 ชีต (1 ชีต/entity) + ชีตวิธีใช้; แถว1=ชื่อไทย แถว2=ชื่อฟิลด์ระบบ แถว3+=ข้อมูล; มี dropdown + ช่องบังคับสีเหลือง; สร้างด้วย openpyxl (สคริปต์ `/tmp/build_template.py` ตอนสร้าง)
+- **Excel Template (`public/WAYTHAI-FORYOU_Template.xlsx`) — ฉบับย่อ 4 ชีต** (ตาม requirement ลูกค้า): ① ออเดอร์ ② รายจ่าย ③ เงินสด ④ พนักงาน + ชีตวิธีใช้; แถว1=ชื่อไทย แถว2=ชื่อฟิลด์ระบบ แถว3+=ข้อมูล; dropdown + ช่องบังคับสีเหลือง; สร้างด้วย openpyxl (`/tmp/build_template4.py`)
+  - **ชีต "order" = composite:** 1 แถว → import.js handler `order` สร้าง customer(+phone) + job + invoice; **มัดจำ → amount_paid, ยอดค้างรับ = total_price − deposit**
+  - **ลูกค้าไม่เน้นสต็อก:** ซ่อนแท็บ คลังสินค้า/รายละเอียดสต็อก/อายุสต็อก/ABC ออกจากเมนู (โค้ด/ข้อมูลยังอยู่ เปิดกลับได้)
 - **แท็บนำเข้าข้อมูล:** ① อัปโหลด Excel Template (อ่านทุกชีตด้วย SheetJS ฝั่ง browser → POST /api/import ตามลำดับ dependency) ② กรอกทีละรายการ ③ CSV — ทุก fetch แนบ `Authorization: Bearer`
 - **แท็บประวัติ/เวอร์ชัน (Log):** อิง `import_batches`/`import_rows` — แต่ละครั้งที่นำเข้า = 1 เวอร์ชัน (เวลา/source/จำนวน) กดดูรายการในแต่ละเวอร์ชันได้ (`/api/import/batch/:id`) — เป็นแบบ "ดูย้อนหลัง" ยังไม่สลับชุด active
 - **BOM / ตั้งราคา (Pricing Calculator):** เครื่องคิดเลขฝั่ง client (`runBOM()`) — ใส่ต้นทุน (ไม้/สี/ฮาร์ดแวร์/ค่าแรง/โสหุ้ย%/อื่นๆ) + กำไรที่ต้องการ% → ราคาขายแนะนำ = ต้นทุน ÷ (1−margin) + Markup + VAT 7% + เตือน "ถ้าลืมคิดโสหุ้ย ราคาต่ำไปเท่าไร" + Pie โครงสร้างต้นทุน
 - **Date range (from–to):** ตัวกรองช่วงวันที่มุมขวาบน ใช้กับ **แท็บข้อมูล (ตาราง)** ผ่าน `/api/table/:entity?from=&to=` (filter ตามคอลัมน์วันที่ของแต่ละ entity) — แท็บอื่นยังใช้ `as_of`
 - **Inventory Detail / Aging:** รายละเอียดสต็อกทุกรายการ (มูลค่า/ROP/ABC/bin) + อายุสต็อกแยกช่วง 0–30/31–60/61–90/91–180/180+ วัน (`A.inventoryAging()`) — เน้นว่า "สต็อก = เงินจม"
 - **งบการเงิน (ขั้นสูง):** งบกำไรขาดทุน + งบดุล (`/api/financials`, `A.incomeStatement()`/`A.balanceSheet()`) — รายได้/COGS/ค่าใช้จ่าย/AR/AP/เงินสด/สต็อก = จริง; สินทรัพย์ถาวร/เงินกู้/ดอกเบี้ย/ค่าเสื่อม/ภาษี/ทุน = **ค่าสมมติ** (ติดป้าย "สมมติ"); ส่วนของเจ้าของคำนวณให้สมดุล
-  - **แท็บ "ภาพรวม" (หัวข้อ "Insight Analysis") รวมทุกอย่างในหน้าเดียว:** KPI cards → Financial Score → พยากรณ์ → Scenario Simulator → โครงสร้างต้นทุน → งบ vs จริง
+  - **แท็บ "ภาพรวม" (หัวข้อ "Insight Analysis") — Dashboard ฉบับลูกค้า:** การ์ดแยกชัด **เงินสดในมือ / ยอดรับเข้าแล้ว / ยอดค้างรับ / กำไรสุทธิ / Runway / ค่าสี** → Financial Score → พยากรณ์ → Scenario Simulator → **ยอดค้างรับรายลูกค้า** → **ยอดขายรายเดือน ประมาณการ vs จริง** + **ค่าใช้จ่ายแยกหมวด (ผลิต/การตลาด/Ads/เช่า/OH)** → งบ vs จริง
+  - ข้อมูลหน้านี้มาจาก **`/api/dashboard`** (`A.arByCustomer`, `A.expenseBuckets`, `A.salesMonthly`) — คิด **ต้นทุน/กำไรจากชีตรายจ่าย** (ไม่พึ่ง job_costs) ให้เข้ากับโมเดล 4 ชีต; กำไรสุทธิ = ยอดบิล − ค่าใช้จ่ายรวม
 - **Financial Score (เต็ม 5):** เฉลี่ยจาก 6 ตัวชี้วัด — Gross Margin, Current Ratio, DIO, CCC, Runway, DSO (ฟังก์ชัน `financialScore()`); แสดงดาว + แถบย่อยรายตัว
 - **พยากรณ์กระแสเงินสด:** การ์ด 13 สัปดาห์ (มีสีสถานะ) + ระยะยาวเลือกช่วง **3/6/9/12/24/36 เดือน** (`renderLongRange()`, `/api/forecast?months=`) แบบ **Base/Best/Worst case**
 - **โครงสร้างต้นทุน:** Pie แยก วัตถุดิบ / สี / ค่าแรงทางตรง (DL) / โสหุ้ย (OH)
 - **Scenario Simulator (gamification):** สไลเดอร์ปรับระดับใช้จ่าย 60–200% → ฉายเงินสดถึงสิ้นปี + ดัชนีสุขภาพการเงิน + คำตัดสินทางการ (🟢แข็งแรง/🟡เฝ้าระวัง/🟠เสี่ยง/🔴วิกฤต) + เตือนเกินงบ — `runForecastGame()` คำนวณฝั่ง client
 - **Wording:** ใช้ภาษาทางการ (ไม่ใช้คำกันเองอย่าง "ย่อยยับ")
+- **PWA (ติดตั้งบนมือถือ iOS/Android):** `public/manifest.webmanifest` + `public/sw.js` (service worker: HTML network-first, static cache-first, /api/* ไม่แคช) + ไอคอน `icon-192/512.png` + meta apple-* ใน `<head>` + ปุ่ม "ติดตั้งแอป" (beforeinstallprompt) ใน header — เสิร์ฟผ่าน Cloudflare assets; **อัปเดต index.html แล้วควรขยับ `CACHE` version ใน sw.js**
 
 ---
 

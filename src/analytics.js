@@ -544,6 +544,53 @@ export function balanceSheet({ cashSatang, arSatang, inventorySatang, apSatang,
 }
 
 // ============================================================
+// L. Dashboard ฉบับลูกค้า (เงินสด/รับ/ค้างรับ, ค่าใช้จ่ายแยกหมวด)
+// ============================================================
+// ยอดค้างรับรายลูกค้า — ลูกค้ารายไหนค้างจ่ายเท่าไร
+export function arByCustomer(invoices, customers, asOf) {
+  const nameById = {}, phoneById = {};
+  for (const c of customers) { nameById[c.id] = c.name; phoneById[c.id] = c.phone; }
+  const m = {};
+  for (const i of invoices) {
+    const out = i.amount_satang - (i.amount_paid_satang || 0);
+    if (out <= 0 || i.status === 'paid' || i.status === 'void') continue;
+    if (!m[i.customer_id]) m[i.customer_id] = { outstanding: 0, overdue: 0 };
+    m[i.customer_id].outstanding += out;
+    if (asOf && new Date(i.due_date) < new Date(asOf)) m[i.customer_id].overdue += out;
+  }
+  return Object.entries(m)
+    .map(([id, v]) => ({ customer: nameById[id] || ('#' + id), phone: phoneById[id] || '', outstanding_satang: v.outstanding, overdue_satang: v.overdue }))
+    .sort((a, b) => b.outstanding_satang - a.outstanding_satang);
+}
+
+// ค่าใช้จ่ายแยกหมวดธุรกิจ: ต้นทุนผลิต / การตลาด / Ads / ค่าเช่า / โสหุ้ย
+const EXP_BUCKET = {
+  paint: 'production', wood: 'production', hardware: 'production', labor: 'production',
+  marketing: 'marketing', ads: 'ads', rent: 'rent',
+  utility: 'overhead', overhead: 'overhead', transport: 'overhead', other: 'overhead', salary: 'production',
+};
+export function expenseBuckets(expenses) {
+  const b = { production: 0, marketing: 0, ads: 0, rent: 0, overhead: 0 };
+  const byCat = {};
+  for (const e of expenses) {
+    const bk = EXP_BUCKET[e.category] || 'overhead';
+    b[bk] += e.amount_satang;
+    byCat[e.category] = (byCat[e.category] || 0) + e.amount_satang;
+  }
+  const total = sum(Object.values(b));
+  return { buckets: b, by_category: byCat, total_satang: total };
+}
+
+// ยอดขายรายเดือน: ประมาณการ (budget) vs จริง (invoiced)
+export function salesMonthly(invoices, budgets) {
+  const actual = {}, budget = {};
+  for (const i of invoices) { if (i.status === 'void') continue; const m = ym(i.issue_date); actual[m] = (actual[m] || 0) + i.amount_satang; }
+  for (const b of budgets) { if (b.budget_type !== 'revenue') continue; budget[b.period] = (budget[b.period] || 0) + b.amount_satang; }
+  const months = [...new Set([...Object.keys(actual), ...Object.keys(budget)])].sort();
+  return months.map((m) => ({ month: m, actual_satang: actual[m] || 0, budget_satang: budget[m] || 0 }));
+}
+
+// ============================================================
 // K. Recommendation Engine + Customer Concentration (#15/#18)
 // ============================================================
 // การกระจุกตัวของลูกค้า — ลูกค้ารายใหญ่คิดเป็นกี่ % ของยอดขาย

@@ -9,6 +9,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#5a9d77">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="WAYTHAI Cashflow">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="icon" type="image/png" href="/icon-192.png">
 <style>
   :root{
     --bg:#f1f4ec;            /* เซจ-ครีมอ่อน (พาสเทล) */
@@ -136,6 +143,7 @@
     <button data-mode="basic" class="active">พื้นฐาน</button>
     <button data-mode="advanced">ขั้นสูง</button>
   </div>
+  <button id="installBtn" style="display:none;background:var(--gold);border:none;color:#2a2410;padding:6px 12px;border-radius:8px;cursor:pointer;font-family:var(--font);font-weight:600">⬇ ติดตั้งแอป</button>
   <button id="logoutBtn" style="background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.34);color:#eef5ee;padding:6px 12px;border-radius:8px;cursor:pointer;font-family:var(--font)">ออกจากระบบ</button>
 </header>
 
@@ -153,7 +161,7 @@ const pct = (v)=> (v==null?'-':v.toLocaleString('th-TH',{maximumFractionDigits:1
 const flowNote = (net)=> net<=0 ? `เงินเข้าสุทธิ +${baht(-net)}/เดือน` : `เผาเงินสุทธิ −${baht(net)}/เดือน`;
 const bahtN = (x)=>'฿'+Math.round(x||0).toLocaleString('th-TH'); // บาทตรงๆ (ไม่ใช่สตางค์) สำหรับเครื่องคิดเลข BOM
 const authHdr = ()=>({'Authorization':'Bearer '+(state.token||'')});
-const ENTITIES = ['customers','suppliers','jobs','job_costs','invoices','bills','inventory_items','inventory_movements','expenses','cash_transactions','budgets','employees','payslips'];
+const ENTITIES = ['order','customers','suppliers','jobs','job_costs','invoices','bills','inventory_items','inventory_movements','expenses','cash_transactions','budgets','employees','payslips'];
 const pill = (st)=> `<span class="pill pill-${st}">${st==='green'?'ปกติ':st==='yellow'?'เฝ้าระวัง':'เสี่ยง'}</span>`;
 const dot = (st)=> `<span class="badge bdot-${st}"></span>`;
 const tip = (t)=> `<span class="tip" data-tip="${t}">?</span>`;
@@ -173,15 +181,11 @@ const TABS = [
   {id:'cost', label:'ต้นทุน & ค่าสี', adv:false},
   {id:'bom', label:'BOM / ตั้งราคา', adv:false},
   {id:'production', label:'การผลิต', adv:false},
-  {id:'inventory', label:'คลังสินค้า', adv:false},
-  {id:'inv_detail', label:'รายละเอียดสต็อก', adv:false},
-  {id:'inv_aging', label:'อายุสต็อก', adv:false},
   {id:'payroll', label:'เงินเดือน', adv:false},
   {id:'data', label:'ข้อมูล (ตาราง)', adv:false},
   {id:'log', label:'ประวัติ/เวอร์ชัน', adv:false},
   {id:'ccc', label:'วงจรเงินสด (CCC)', adv:true},
   {id:'jobs', label:'กำไรรายงาน', adv:true},
-  {id:'abc', label:'ABC / ของตาย', adv:true},
   {id:'financials', label:'งบการเงิน', adv:true},
   {id:'import', label:'นำเข้าข้อมูล', adv:false},
 ];
@@ -297,28 +301,30 @@ async function renderLongRange(months){
 
 async function tabOverview(){
   const period=(state.asOf||'').slice(0,7);
-  const [d,ag,cost,fc,bud] = await Promise.all([api('/summary'), api('/aging'), api('/cost'), api('/forecast?months='+FCHORIZON), api('/budget?period='+period)]);
-  const r = d.runway, l = d.liquidity, g = d.gross_margin, p = d.paint, c = ag.ccc;
+  const [d,dash,ag,fc,bud] = await Promise.all([api('/summary'), api('/dashboard'), api('/aging'), api('/forecast?months='+FCHORIZON), api('/budget?period='+period)]);
+  const r = d.runway, l = d.liquidity, c = ag.ccc;
+  const netMarginPct = dash.billed_revenue_satang? Math.round(dash.net_profit_satang/dash.billed_revenue_satang*1000)/10 : 0;
+  const paintExp = dash.expense_buckets.by_category.paint||0;
+  const paintPctRev = dash.billed_revenue_satang? Math.round(paintExp/dash.billed_revenue_satang*1000)/10 : 0;
   const runwayTxt = r.runway_months==null ? 'กระแสบวก' : r.runway_months+' เดือน';
   const w=fc.thirteen_week, lr=fc.long_range, firstNeg=w.first_negative_week;
-  const fs=financialScore({gm:g.gross_margin_pct,cr:l.current_ratio,dio:c.dio,ccc:c.ccc,runway:r.runway_months,dso:c.dso});
+  const fs=financialScore({gm:netMarginPct,cr:l.current_ratio,dio:c.dio,ccc:c.ccc,runway:r.runway_months,dso:c.dso});
   const dd=new Date(state.asOf), yr=dd.getFullYear(); const mo=dd.getMonth();
   let monthsLeft=11-mo; if(monthsLeft<1) monthsLeft=12;
   const glabels=[]; for(let i=1;i<=monthsLeft;i++){ glabels.push(new Date(yr,mo+i,1).toISOString().slice(0,7)); }
   GAME={cash:r.cash_satang,inflow:r.avg_inflow_satang,outflow:r.avg_outflow_satang,monthsLeft,labels:glabels};
-  const cb=cost.cogs.by_type;
-  const rawMat=(cb.material_wood||0)+(cb.material_hardware||0), paintC=cb.material_paint||0, dl=cb.labor||0, oh=cb.overhead||0;
+  const eb=dash.expense_buckets.buckets;
   const week13st=firstNeg?(firstNeg<=4?'red':'yellow'):'green';
 
   setMain(`
     <div class="section"><h2>Insight Analysis</h2>
       <div class="grid cards">
-        ${card('เงินสดในมือ','เงินจริงๆ ที่มีอยู่ตอนนี้ รวมทุกบัญชี', baht(d.cash_on_hand_satang),'รวมทุกบัญชีธนาคาร/เงินสด', d.cash_on_hand_satang>0?'green':'red')}
-        ${card('เงินสำรอง (Runway)','ถ้าใช้จ่ายแบบเดิม เงินสดจะอยู่ได้อีกกี่เดือน = เงินในมือ ÷ เงินที่ใช้สุทธิต่อเดือน', runwayTxt, flowNote(r.net_burn_satang)+' '+pill(r.status), r.status)}
-        ${card('สภาพคล่อง (Current Ratio)','สินทรัพย์หมุนเวียน ÷ หนี้สินระยะสั้น (≥1.5 ถือว่าดี)', l.current_ratio, 'Quick ratio '+l.quick_ratio+' '+pill(l.current_status), l.current_status)}
-        ${card('กำไรขั้นต้น (Gross Margin)','ขายได้ 100 บาท เหลือกำไรขั้นต้นกี่บาทหลังหักต้นทุน', pct(g.gross_margin_pct), 'ยอดขาย '+baht(g.revenue_satang), g.gross_margin_pct>=30?'green':g.gross_margin_pct>=15?'yellow':'red')}
-        ${card('ค่าใช้จ่าย / ยอดขาย','สัดส่วนค่าใช้จ่ายดำเนินงานต่อยอดขาย', pct(d.expense_to_sales.expense_to_sales_pct), 'ดูรายหมวดในแท็บต้นทุน', d.expense_to_sales.expense_to_sales_pct<60?'green':d.expense_to_sales.expense_to_sales_pct<80?'yellow':'red')}
-        ${card('ต้นทุนค่าสี','สัดส่วนค่าสีต่อยอดขายและแนวโน้ม', pct(p.paint_pct_of_revenue), 'ต่อบาน '+baht(p.paint_per_door_satang)+' · แนวโน้ม '+(p.trend_direction==='up'?'เพิ่มขึ้น':p.trend_direction==='down'?'ลดลง':'คงที่')+' '+pill(p.status), p.status)}
+        ${card('เงินสดในมือ','เงินจริงๆ ในบัญชี/เงินสด (รวมทุกบัญชี)', baht(dash.cash_on_hand_satang),'ยอดคงเหลือจริง', dash.cash_on_hand_satang>0?'green':'red')}
+        ${card('ยอดรับเข้าแล้ว','เงินที่ลูกค้าจ่ายมาแล้วจริง (มัดจำ + ชำระ)', baht(dash.received_satang),'จากยอดบิลรวม '+baht(dash.billed_revenue_satang), 'green')}
+        ${card('ยอดค้างรับ','เงินที่ลูกค้ายังค้างจ่าย — ดูรายลูกค้าด้านล่าง', baht(dash.outstanding_satang),'รวมที่ยังไม่ได้รับ', dash.outstanding_satang>0?'yellow':'green')}
+        ${card('กำไรสุทธิ','ยอดขาย − ค่าใช้จ่ายทั้งหมด', baht(dash.net_profit_satang), 'อัตรากำไรสุทธิ '+pct(netMarginPct), dash.net_profit_satang>0?'green':'red')}
+        ${card('เงินสำรอง (Runway)','เงินสดจะอยู่ได้อีกกี่เดือน', runwayTxt, flowNote(r.net_burn_satang)+' '+pill(r.status), r.status)}
+        ${card('ต้นทุนค่าสี','ค่าสีคิดเป็นกี่ % ของยอดขาย (จากรายจ่าย)', pct(paintPctRev), 'ค่าสีรวม '+baht(paintExp), paintPctRev>25?'red':paintPctRev>15?'yellow':'green')}
       </div>
     </div>
 
@@ -379,12 +385,17 @@ async function tabOverview(){
       </div>
     </div>
 
-    <div class="section"><h2>โครงสร้างต้นทุนและค่าใช้จ่าย ${tip('สัดส่วนต้นทุนการผลิต + แนวโน้มค่าสี + ค่าใช้จ่ายต่อยอดขาย')}</h2>
+    <div class="section"><h2>ยอดค้างรับรายลูกค้า ${tip('ลูกค้ารายไหนค้างจ่ายเท่าไร — คอลัมน์เลยกำหนด (แดง) = เลยวันครบกำหนดชำระแล้ว')}</h2>
+      <div class="card"><div style="overflow:auto"><table><thead><tr><th>ลูกค้า</th><th>เบอร์โทร</th><th>ยอดค้างรับ</th><th>เลยกำหนด</th></tr></thead><tbody>
+      ${dash.ar_by_customer.length?dash.ar_by_customer.map(x=>`<tr><td>${x.customer}</td><td>${x.phone||'-'}</td><td>${baht(x.outstanding_satang)}</td><td style="${x.overdue_satang>0?'color:var(--red);font-weight:600':''}">${x.overdue_satang>0?baht(x.overdue_satang):'-'}</td></tr>`).join(''):'<tr><td colspan=4 class="muted">ไม่มียอดค้างรับ 🎉</td></tr>'}
+      </tbody></table></div></div>
+    </div>
+
+    <div class="section"><h2>ยอดขาย & ค่าใช้จ่าย ${tip('ยอดขายรายเดือน ประมาณการ vs จริง + ค่าใช้จ่ายแยกหมวดธุรกิจ')}</h2>
       <div class="row">
-        <div class="chartbox"><canvas id="costPie"></canvas></div>
-        <div class="chartbox"><canvas id="ovPaint"></canvas></div>
+        <div class="chartbox"><canvas id="salesMonthly"></canvas></div>
+        <div class="chartbox"><canvas id="expBuckets"></canvas></div>
       </div>
-      <div class="chartbox" style="margin-top:14px"><canvas id="ovExp"></canvas></div>
     </div>
 
     <div class="section"><h2>งบประมาณ vs จริง — ${bud.period} ${tip('Variance = จริง − งบ; รายจ่ายต่ำกว่างบ = ดี, รายรับเกินงบ = ดี')}</h2>
@@ -394,10 +405,12 @@ async function tabOverview(){
       </tbody></table></div>
     </div>
   `);
-  mkChart('costPie',{type:'doughnut',data:{labels:['วัตถุดิบ (ไม้+ฮาร์ดแวร์)','สี (Paint)','ค่าแรงทางตรง (DL)','โสหุ้ยการผลิต (OH)'],datasets:[{data:[rawMat,paintC,dl,oh].map(v=>v/100),backgroundColor:['#9a6a43','#d4694c','#5a9d77','#c9aa63']}]},options:chartOpts('สัดส่วนต้นทุนการผลิต (COGS)')});
-  mkChart('ovPaint',{type:'line',data:{labels:p.trend.map(t=>t.month),datasets:[{label:'ค่าสีต่อเดือน (บาท)',data:p.trend.map(t=>t.paint_satang/100),borderColor:'#d4694c',backgroundColor:'rgba(212,105,76,.12)',fill:true,tension:.3}]},options:chartOpts('แนวโน้มต้นทุนค่าสี')});
-  const e = d.expense_to_sales.rows.slice(0,6);
-  mkChart('ovExp',{type:'bar',data:{labels:e.map(x=>catTH(x.category)),datasets:[{label:'% ของยอดขาย',data:e.map(x=>x.pct_of_sales),backgroundColor:'#5a9d77'}]},options:chartOpts('ค่าใช้จ่ายต่อยอดขาย (รายหมวด)')});
+  const sm=dash.sales_monthly;
+  mkChart('salesMonthly',{type:'bar',data:{labels:sm.map(x=>x.month),datasets:[
+    {label:'ประมาณการ (งบ)',data:sm.map(x=>x.budget_satang/100),backgroundColor:'#c9aa63'},
+    {label:'จริง',data:sm.map(x=>x.actual_satang/100),backgroundColor:'#5a9d77'}
+  ]},options:chartOpts('ยอดขายรายเดือน: ประมาณการ vs จริง')});
+  mkChart('expBuckets',{type:'doughnut',data:{labels:['ต้นทุนผลิต','ค่าการตลาด','Ads','ค่าเช่า','โสหุ้ย/อื่นๆ'],datasets:[{data:[eb.production,eb.marketing,eb.ads,eb.rent,eb.overhead].map(v=>v/100),backgroundColor:['#9a6a43','#5a9d77','#d4694c','#c9aa63','#b0a48f']}]},options:chartOpts('ค่าใช้จ่ายแยกหมวดธุรกิจ')});
   mkChart('fcLong',{type:'line',data:{labels:lr.base.series.map(x=>x.month),datasets:[
     {label:'Base case',data:lr.base.series.map(x=>x.balance_satang/100),borderColor:'#9a6a43',tension:.2},
     {label:'Best case',data:lr.optimistic.series.map(x=>x.balance_satang/100),borderColor:'#4aa478',tension:.2},
@@ -1006,6 +1019,16 @@ document.querySelectorAll('#modeToggle button').forEach(b=> b.onclick=()=>{
 // ตรวจ token เดิม
 try{ state.token=localStorage.getItem('cf_token'); }catch(e){}
 if(state.token){ showApp(); } // ถ้า token หมดอายุ api() จะเด้งกลับ login เอง
+
+// ── PWA: service worker + ปุ่มติดตั้ง ─────────────────────────
+if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{})); }
+let deferredPrompt=null;
+window.addEventListener('beforeinstallprompt',(e)=>{ e.preventDefault(); deferredPrompt=e; const b=document.getElementById('installBtn'); if(b) b.style.display=''; });
+document.getElementById('installBtn').onclick=async()=>{
+  if(deferredPrompt){ deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt=null; document.getElementById('installBtn').style.display='none'; }
+  else { alert('ติดตั้งบน iPhone: กดปุ่มแชร์ (Share) ในซาฟารี → "เพิ่มไปยังหน้าจอโฮม"\nAndroid: เมนู ⋮ → "ติดตั้งแอป/Add to Home screen"'); }
+};
+window.addEventListener('appinstalled',()=>{ const b=document.getElementById('installBtn'); if(b) b.style.display='none'; });
 </script>
 </body>
 </html>

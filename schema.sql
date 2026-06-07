@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS customers (
   source            TEXT,
   external_id       TEXT,
   name              TEXT NOT NULL,
+  phone             TEXT,
   credit_terms_days INTEGER DEFAULT 30,
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(source, external_id)
