@@ -314,6 +314,10 @@ async function tabOverview(){
   const glabels=[]; for(let i=1;i<=monthsLeft;i++){ glabels.push(new Date(yr,mo+i,1).toISOString().slice(0,7)); }
   GAME={cash:r.cash_satang,inflow:r.avg_inflow_satang,outflow:r.avg_outflow_satang,monthsLeft,labels:glabels};
   const eb=dash.expense_buckets.buckets, ps=dash.production_split;
+  const selfPD=ps.self.doors?ps.self.profit/ps.self.doors:0, outPD=ps.outsourced.doors?ps.outsourced.profit/ps.outsourced.doors:0;
+  const prodVerdict=(ps.self.count&&ps.outsourced.count)
+    ? `ผลิตเองมาร์จิ้น <b>${ps.self_margin_pct}%</b> (กำไร/บาน ${baht(selfPD)}) vs สั่งซัพ <b>${ps.out_margin_pct}%</b> (กำไร/บาน ${baht(outPD)}) — ${ps.self_margin_pct>=ps.out_margin_pct?'งานที่กำลังผลิตไหว ควรเลือกผลิตเองก่อน เพราะกำไรต่อบานดีกว่า ส่วนสั่งซัพไว้รับช่วงงานล้น/เร่งส่ง':'ช่วงนี้สั่งซัพคุ้มกว่า ลองทบทวนต้นทุนการผลิตเอง'}`
+    : 'ใส่ข้อมูลทั้งผลิตเองและสั่งซัพ เพื่อเปรียบเทียบความคุ้มค่า';
   const week13st=firstNeg?(firstNeg<=4?'red':'yellow'):'green';
 
   setMain(`
@@ -391,6 +395,7 @@ async function tabOverview(){
         ${card('กำไรสั่งซัพผลิต','งานที่ส่งซัพ: ราคาขาย − ที่จ่ายซัพ (+สี+ส่ง)', baht(ps.outsourced.profit), 'ยอดขาย '+baht(ps.outsourced.revenue)+' · '+ps.outsourced.count+' งาน · margin '+pct(ps.out_margin_pct), ps.outsourced.profit>=0?'green':'red')}
         ${card('กำไรรวมจากงาน','ผลิตเอง + สั่งซัพ', baht(ps.total_profit),'', ps.total_profit>=0?'green':'red')}
       </div>
+      <div class="alert" style="background:rgba(74,164,120,.08);border-color:rgba(74,164,120,.3);color:var(--accent-d);margin-top:4px">💡 ${prodVerdict}</div>
       ${ps.monthly.length?'<div class="chartbox" style="margin-top:14px"><canvas id="prodSplitChart"></canvas></div>':''}
     </div>
 

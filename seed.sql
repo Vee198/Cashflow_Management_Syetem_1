@@ -41,6 +41,16 @@ INSERT INTO jobs (id,source,external_id,customer_id,description,quantity,quoted_
  (7,'seed','JOB-207',3,'ประตูไม้เนื้อแข็ง 10 บาน',10,  21000000,'done',     '2026-05-05','2026-05-26',10,11,10,1,0,'2026-05-30',NULL),
  (8,'seed','JOB-208',2,'ประตูไม้สักบานคู่ 18 บาน',18,  43200000,'in_progress','2026-05-20',NULL,18,0,0,0,0,'2026-06-25',NULL);
 
+-- แหล่งผลิต + ต้นทุนรวม (ผลิตเอง margin ~30%, สั่งซัพ margin ~12–15%) เพื่อให้ Dashboard เห็นภาพชัด
+UPDATE jobs SET production_type='self',       total_cost_satang=25200000 WHERE external_id='JOB-201'; -- 360k, margin 30%
+UPDATE jobs SET production_type='outsourced', total_cost_satang=43860000 WHERE external_id='JOB-202'; -- 510k, margin 14%
+UPDATE jobs SET production_type='self',       total_cost_satang=12240000 WHERE external_id='JOB-203'; -- 180k, margin 32%
+UPDATE jobs SET production_type='outsourced', total_cost_satang=26100000 WHERE external_id='JOB-204'; -- 300k, margin 13%
+UPDATE jobs SET production_type='self',       total_cost_satang=34200000 WHERE external_id='JOB-205'; -- 475k, margin 28%
+UPDATE jobs SET production_type='outsourced', total_cost_satang=24288000 WHERE external_id='JOB-206'; -- 276k, margin 12%
+UPDATE jobs SET production_type='self',       total_cost_satang=14490000 WHERE external_id='JOB-207'; -- 210k, margin 31%
+UPDATE jobs SET production_type='outsourced', total_cost_satang=37584000 WHERE external_id='JOB-208'; -- 432k, margin 13%
+
 -- ── ต้นทุนรายงาน (job_costs) — สีเป็นก้อนใหญ่ผิดปกติ ──────────
 -- โครงสร้างต่อบานโดยรวม: ไม้สูงสุด, "สี" สูงผิดปกติ (~28–32% ของต้นทุน), ค่าแรง, โสหุ้ย
 INSERT INTO job_costs (source,external_id,job_id,cost_type,amount_satang,incurred_at) VALUES
