@@ -158,18 +158,28 @@ app.get('/api/dashboard', async (c) => {
     let billed = 0, received = 0;
     for (const i of invoices) { if (i.status === 'void') continue; billed += i.amount_satang; received += (i.amount_paid_satang || 0); }
     const eb = A.expenseBuckets(expenses);
+    // ต้นทุนผลิต + ค่าสี ดึงจากออเดอร์ (jobs); ค่าใช้จ่ายอื่นจากชีตรายจ่าย (overhead/marketing/ads/rent)
+    let prodCost = 0, paintCost = 0;
+    for (const j of jobs) { prodCost += j.total_cost_satang || 0; paintCost += j.cost_paint_satang || 0; }
+    const overheadExp = eb.buckets.marketing + eb.buckets.ads + eb.buckets.rent + eb.buckets.overhead;
+    const buckets = { production: prodCost, marketing: eb.buckets.marketing, ads: eb.buckets.ads, rent: eb.buckets.rent, overhead: eb.buckets.overhead };
+    const ps = A.profitByProductionType(jobs);
+    const jobsRevenue = ps.self.revenue + ps.outsourced.revenue;
     return ok(c, {
       as_of: asOf,
       cash_on_hand_satang: cash,
       received_satang: received,
       outstanding_satang: billed - received,
       billed_revenue_satang: billed,
-      net_profit_satang: billed - eb.total_satang,
+      jobs_revenue_satang: jobsRevenue,
+      production_cost_satang: prodCost,
+      paint_cost_satang: paintCost + (eb.by_category.paint || 0),
+      net_profit_satang: ps.total_profit - overheadExp,   // กำไรงานจริง (ผลิตเอง+สั่งซัพ) − ค่าใช้จ่ายอื่น
       runway: A.burnAndRunway(cashTxns, asOf, 3),
-      expense_buckets: eb,
+      expense_buckets: { buckets, by_category: eb.by_category, total_satang: prodCost + overheadExp },
       ar_by_customer: A.arByCustomer(invoices, customers, asOf),
       sales_monthly: A.salesMonthly(invoices, budgets),
-      production_split: A.profitByProductionType(jobs),
+      production_split: ps,
     });
   } catch (e) { return err(c, e, 500); }
 });

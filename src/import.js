@@ -18,11 +18,15 @@ const HANDLERS = {
   order: async (db, r, source) => {
     const custExt = (r.phone && String(r.phone).trim()) ? 'PH-' + String(r.phone).trim() : 'CU-' + (r.customer_name || r.external_id);
     await HANDLERS.customers(db, { external_id: custExt, name: r.customer_name || custExt, phone: r.phone }, source);
+    // ต้นทุนรวม = ผลรวมช่องแยก (ไม้+สี+แรง+ส่ง) ถ้ามี; ไม่งั้นใช้ total_cost ที่กรอกตรง
+    const comp = (Number(r.cost_wood) || 0) + (Number(r.cost_paint) || 0) + (Number(r.cost_labor) || 0) + (Number(r.cost_shipping) || 0);
+    const totalCost = comp > 0 ? comp : (Number(r.total_cost) || 0);
     await HANDLERS.jobs(db, {
       external_id: r.external_id, customer_external_id: custExt, description: r.description,
       quantity: r.quantity, quoted_price: r.total_price, status: r.status ?? 'in_progress',
       started_at: r.issue_date, promised_date: r.due_date,
-      production_type: r.production_type, total_cost: r.total_cost,
+      production_type: r.production_type, total_cost: totalCost,
+      cost_wood: r.cost_wood, cost_paint: r.cost_paint, cost_labor: r.cost_labor, cost_shipping: r.cost_shipping,
     }, source);
     const total = Number(r.total_price) || 0, dep = Number(r.deposit) || 0;
     const st = dep <= 0 ? 'open' : (dep >= total ? 'paid' : 'partial');
@@ -42,13 +46,15 @@ const HANDLERS = {
     const customer_id = await lookupId(db, 'customers', source, r.customer_external_id);
     return upsert(db, `jobs`,
       ['customer_id', 'description', 'quantity', 'quoted_price_satang', 'status', 'started_at', 'completed_at',
-       'production_type', 'total_cost_satang',
+       'production_type', 'total_cost_satang', 'cost_wood_satang', 'cost_paint_satang', 'cost_labor_satang', 'cost_shipping_satang',
        'qty_ordered', 'qty_produced', 'qty_good', 'qty_scrap', 'qty_rework', 'promised_date', 'delivered_date'],
       source, r.external_id, {
         customer_id, description: r.description ?? null, quantity: r.quantity ?? 0,
         quoted_price_satang: baht(r.quoted_price), status: r.status ?? 'quote',
         started_at: r.started_at ?? null, completed_at: r.completed_at ?? null,
         production_type: r.production_type ?? 'self', total_cost_satang: baht(r.total_cost),
+        cost_wood_satang: baht(r.cost_wood), cost_paint_satang: baht(r.cost_paint),
+        cost_labor_satang: baht(r.cost_labor), cost_shipping_satang: baht(r.cost_shipping),
         qty_ordered: r.qty_ordered ?? r.quantity ?? 0, qty_produced: r.qty_produced ?? 0,
         qty_good: r.qty_good ?? 0, qty_scrap: r.qty_scrap ?? 0, qty_rework: r.qty_rework ?? 0,
         promised_date: r.promised_date ?? null, delivered_date: r.delivered_date ?? null,

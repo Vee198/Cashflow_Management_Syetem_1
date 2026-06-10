@@ -303,9 +303,10 @@ async function tabOverview(){
   const period=(state.asOf||'').slice(0,7);
   const [d,dash,ag,fc,bud] = await Promise.all([api('/summary'), api('/dashboard'), api('/aging'), api('/forecast?months='+FCHORIZON), api('/budget?period='+period)]);
   const r = d.runway, l = d.liquidity, c = ag.ccc;
-  const netMarginPct = dash.billed_revenue_satang? Math.round(dash.net_profit_satang/dash.billed_revenue_satang*1000)/10 : 0;
-  const paintExp = dash.expense_buckets.by_category.paint||0;
-  const paintPctRev = dash.billed_revenue_satang? Math.round(paintExp/dash.billed_revenue_satang*1000)/10 : 0;
+  const revBase = dash.jobs_revenue_satang || dash.billed_revenue_satang || 0;
+  const netMarginPct = revBase? Math.round(dash.net_profit_satang/revBase*1000)/10 : 0;
+  const paintExp = dash.paint_cost_satang||0;
+  const paintPctRev = revBase? Math.round(paintExp/revBase*1000)/10 : 0;
   const runwayTxt = r.runway_months==null ? 'กระแสบวก' : r.runway_months+' เดือน';
   const w=fc.thirteen_week, lr=fc.long_range, firstNeg=w.first_negative_week;
   const fs=financialScore({gm:netMarginPct,cr:l.current_ratio,dio:c.dio,ccc:c.ccc,runway:r.runway_months,dso:c.dso});
