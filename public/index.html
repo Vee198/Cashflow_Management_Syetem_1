@@ -154,7 +154,7 @@
 // ============================================================
 // state & helpers
 // ============================================================
-const state = { mode:'basic', tab:'overview', asOf:new Date().toISOString().slice(0,10), from:null, to:null, dataEntity:'invoices' };
+const state = { mode:'basic', tab:'overview', asOf:new Date().toISOString().slice(0,10), from:null, to:null, dataEntity:'invoices', paintFilter:{} };
 const charts = {};
 const baht = (s)=> (s==null?'-':'฿'+(Math.round(s)/100).toLocaleString('th-TH',{maximumFractionDigits:0}));
 const pct = (v)=> (v==null?'-':v.toLocaleString('th-TH',{maximumFractionDigits:1})+'%');
@@ -211,7 +211,9 @@ function card(title, tipText, bigHtml, noteHtml, status){
   </div>`;
 }
 function setMain(html){ document.getElementById('main').innerHTML = html; }
-function mkChart(id, cfg){ if(charts[id]) charts[id].destroy(); const el=document.getElementById(id); if(el) charts[id]=new Chart(el, cfg); }
+function mkChart(id, cfg){ if(charts[id]) charts[id].destroy(); const el=document.getElementById(id); if(!el) return;
+  if((cfg.type==='doughnut'||cfg.type==='pie') && cfg.options && cfg.options.scales) delete cfg.options.scales; // โดนัท/พาย ไม่ต้องมีแกน x/y
+  charts[id]=new Chart(el, cfg); }
 
 // ============================================================
 // tabs
@@ -751,31 +753,41 @@ async function tabAdvisor(){
 }
 
 // ── วิเคราะห์ต้นทุนสี/วัตถุดิบ (จาก material_purchases) ──────
+function setPaintFilter(dim,val){ state.paintFilter=state.paintFilter||{}; if(val) state.paintFilter[dim]=val; else delete state.paintFilter[dim]; tabPaintAnalysis(); }
+function clearPaintFilter(){ state.paintFilter={}; tabPaintAnalysis(); }
 async function tabPaintAnalysis(){
-  const d=await api('/paint-analysis');
-  if(!d.count){ setMain('<div class="section"><h2>วิเคราะห์ค่าสี</h2><div class="card"><span class="muted">ยังไม่มีข้อมูลการซื้อสี/วัตถุดิบ — อัปโหลดชีต material_purchases ผ่านแท็บนำเข้าข้อมูล (ใช้ ETL etl_dataset_to_template.py)</span></div></div>'); return; }
+  const f=state.paintFilter||{};
+  const active=Object.entries(f).filter(([k,v])=>v);
+  const qs=active.map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
+  const d=await api('/paint-analysis'+(qs?('?'+qs):''));
+  if(!d.count && !active.length){ setMain('<div class="section"><h2>วิเคราะห์ค่าสี</h2><div class="card"><span class="muted">ยังไม่มีข้อมูลการซื้อสี/วัตถุดิบ — อัปโหลดชีต material_purchases ผ่านแท็บนำเข้าข้อมูล (ใช้ ETL etl_dataset_to_template.py)</span></div></div>'); return; }
   const pctOf=(s)=>d.total_satang?Math.round(s/d.total_satang*1000)/10:0;
-  const tbl=(rows,label)=>`<div class="card" style="flex:1;min-width:280px"><h3>${label} (สูงสุด ${Math.min(rows.length,12)})</h3><div style="overflow:auto"><table><thead><tr><th>${label}</th><th>ยอดซื้อ</th><th>%</th><th>ครั้ง</th></tr></thead><tbody>${rows.slice(0,12).map(x=>`<tr><td>${x.name}</td><td>${baht(x.satang)}</td><td>${pct(pctOf(x.satang))}</td><td>${x.count}</td></tr>`).join('')}</tbody></table></div></div>`;
+  const DIM={vendor:'ร้านค้า',brand:'แบรนด์',item_type:'ชนิดสี'};
+  const filterBar = active.length
+    ? `<div class="card card-green" style="margin-bottom:14px"><b>🔎 กำลังกรอง:</b> ${active.map(([k,v])=>`<span class="pill pill-green" style="margin:0 4px">${DIM[k]}: ${v} <b style="cursor:pointer" onclick="setPaintFilter('${k}',null)">✕</b></span>`).join('')} &nbsp;<button class="hz-btn" onclick="clearPaintFilter()">↺ ดูทั้งหมด</button></div>`
+    : `<div class="muted" style="font-size:12px;margin-bottom:10px">💡 คลิกที่ <b>แบรนด์ในกราฟ</b> หรือ <b>แถวในตาราง</b> เพื่อกรองทั้งหน้าให้เหลือเฉพาะรายการนั้น (Interactive)</div>`;
+  const tbl=(rows,dim,label)=>`<div class="card" style="flex:1;min-width:280px"><h3>${label}</h3><div style="overflow:auto"><table><thead><tr><th>${label}</th><th>ยอดซื้อ</th><th>%</th><th>ครั้ง</th></tr></thead><tbody>${rows.slice(0,12).map(x=>`<tr style="cursor:pointer" title="คลิกเพื่อกรอง" onclick="setPaintFilter('${dim}',decodeURIComponent('${encodeURIComponent(x.name)}'))"><td>${x.name}</td><td>${baht(x.satang)}</td><td>${pct(pctOf(x.satang))}</td><td>${x.count}</td></tr>`).join('')}</tbody></table></div></div>`;
   setMain(`
-    <div class="section"><h2>วิเคราะห์ต้นทุนสี/วัตถุดิบ ${tip('จากประวัติการซื้อจริง แยกราย ร้านค้า / แบรนด์ / ชนิดสี')}</h2>
+    <div class="section"><h2>วิเคราะห์ต้นทุนสี/วัตถุดิบ ${tip('คลิกแบรนด์/ร้าน/ชนิด เพื่อกรองทั้งหน้า — กราฟและการ์ดจะเปลี่ยนตาม')}</h2>
+      ${filterBar}
       <div class="grid cards">
-        ${card('ยอดซื้อทั้งหมด','รวมทุกหมวด (รวมภาษี)', baht(d.total_satang), d.count+' รายการ', null)}
-        ${card('ค่าสี (paint)','เฉพาะหมวดสี', baht(d.paint_total_satang), pct(pctOf(d.paint_total_satang))+' ของยอดซื้อ', null)}
-        ${card('ร้านที่ซื้อบ่อยสุด','ร้านที่มีจำนวนครั้งซื้อมากสุด', d.top_vendor_by_count?d.top_vendor_by_count.name:'-', d.top_vendor_by_count?(d.top_vendor_by_count.count+' ครั้ง · '+baht(d.top_vendor_by_count.satang)):'', null)}
-        ${card('แบรนด์หลัก','แบรนด์ที่ซื้อบ่อยสุด', d.top_brand_by_count?d.top_brand_by_count.name:'-', d.top_brand_by_count?(d.top_brand_by_count.count+' ครั้ง · '+baht(d.top_brand_by_count.satang)):'', null)}
+        ${card(active.length?'ยอดซื้อ (กรองแล้ว)':'ยอดซื้อทั้งหมด','รวมภาษี', baht(d.total_satang), d.count+' รายการ', null)}
+        ${card('ค่าสี (paint)','', baht(d.paint_total_satang), pct(pctOf(d.paint_total_satang))+' ของยอด', null)}
+        ${card('ร้านที่ซื้อบ่อยสุด','จำนวนครั้งมากสุด', d.top_vendor_by_count?d.top_vendor_by_count.name:'-', d.top_vendor_by_count?(d.top_vendor_by_count.count+' ครั้ง · '+baht(d.top_vendor_by_count.satang)):'', null)}
+        ${card('แบรนด์หลัก','ซื้อบ่อยสุด', d.top_brand_by_count?d.top_brand_by_count.name:'-', d.top_brand_by_count?(d.top_brand_by_count.count+' ครั้ง · '+baht(d.top_brand_by_count.satang)):'', null)}
       </div>
     </div>
     <div class="section"><h2>แนวโน้มการซื้อรายเดือน</h2><div class="chartbox"><canvas id="paintTrend"></canvas></div></div>
-    <div class="section"><h2>แยกตามร้านค้า / แบรนด์ / ชนิดสี</h2>
-      <div class="row">${tbl(d.by_vendor,'ร้านค้า')}${tbl(d.by_brand,'แบรนด์')}</div>
-      <div class="row" style="margin-top:14px">${tbl(d.by_type,'ชนิดสี')}<div class="chartbox" style="flex:1;min-width:280px"><canvas id="paintBrand"></canvas></div></div>
+    <div class="section"><h2>แยกตามร้านค้า / แบรนด์ / ชนิดสี ${tip('คลิกแถวเพื่อกรอง')}</h2>
+      <div class="row">${tbl(d.by_vendor,'vendor','ร้านค้า')}${tbl(d.by_brand,'brand','แบรนด์')}</div>
+      <div class="row" style="margin-top:14px">${tbl(d.by_type,'item_type','ชนิดสี')}<div class="chartbox" style="flex:1;min-width:280px"><canvas id="paintBrand"></canvas></div></div>
     </div>
   `);
   mkChart('paintTrend',{type:'bar',data:{labels:d.monthly.map(x=>x.month),datasets:[
     {label:'ค่าสี',data:d.monthly.map(x=>x.paint/100),backgroundColor:'#d4694c'},
     {label:'วัตถุดิบอื่น',data:d.monthly.map(x=>x.other/100),backgroundColor:'#9a6a43'}
   ]},options:chartOpts('ยอดซื้อรายเดือน (ค่าสี vs วัตถุดิบอื่น)')});
-  mkChart('paintBrand',{type:'doughnut',data:{labels:d.by_brand.slice(0,6).map(x=>x.name),datasets:[{data:d.by_brand.slice(0,6).map(x=>x.satang/100),backgroundColor:['#5a9d77','#9a6a43','#d4694c','#c9aa63','#7cb295','#b0a48f']}]},options:chartOpts('สัดส่วนยอดซื้อตามแบรนด์')});
+  mkChart('paintBrand',{type:'doughnut',data:{labels:d.by_brand.slice(0,6).map(x=>x.name),datasets:[{data:d.by_brand.slice(0,6).map(x=>x.satang/100),backgroundColor:['#5a9d77','#9a6a43','#d4694c','#c9aa63','#7cb295','#b0a48f']}]},options:{...chartOpts('สัดส่วนยอดซื้อตามแบรนด์ (คลิกเพื่อกรอง)'),onClick:(e,els,ch)=>{ if(els.length){ setPaintFilter('brand', ch.data.labels[els[0].index]); } }}});
 }
 
 // ── เฟส 4: BOM / เครื่องคำนวณราคาขาย (client-side) ──────────

@@ -191,8 +191,15 @@ app.get('/api/dashboard', async (c) => {
 // ---------- PAINT / MATERIAL COST ANALYSIS (วิเคราะห์ค่าสี) ----------
 app.get('/api/paint-analysis', async (c) => {
   try {
-    const purchases = await repo.getMaterialPurchases(c.env.DB);
-    return ok(c, A.materialPurchaseAnalysis(purchases));
+    const all = await repo.getMaterialPurchases(c.env.DB);
+    const norm = (s) => (s || '').toString().trim();
+    const fv = c.req.query('vendor'), fb = c.req.query('brand'), ft = c.req.query('item_type');
+    const match = (val, f) => f === '(ไม่ระบุ)' ? !norm(val) : norm(val) === f;
+    let rows = all;
+    if (fv) rows = rows.filter((p) => match(p.vendor, fv));
+    if (fb) rows = rows.filter((p) => match(p.brand, fb));
+    if (ft) rows = rows.filter((p) => match(p.item_type, ft));
+    return ok(c, A.materialPurchaseAnalysis(rows));
   } catch (e) { return err(c, e, 500); }
 });
 
