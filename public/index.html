@@ -761,8 +761,8 @@ async function tabPaintAnalysis(){
       <div class="grid cards">
         ${card('ยอดซื้อทั้งหมด','รวมทุกหมวด (รวมภาษี)', baht(d.total_satang), d.count+' รายการ', null)}
         ${card('ค่าสี (paint)','เฉพาะหมวดสี', baht(d.paint_total_satang), pct(pctOf(d.paint_total_satang))+' ของยอดซื้อ', null)}
-        ${card('ร้านที่ซื้อเยอะสุด','', d.by_vendor[0]?d.by_vendor[0].name:'-', d.by_vendor[0]?baht(d.by_vendor[0].satang):'', null)}
-        ${card('แบรนด์หลัก','', d.by_brand[0]?d.by_brand[0].name:'-', d.by_brand[0]?baht(d.by_brand[0].satang):'', null)}
+        ${card('ร้านที่ซื้อบ่อยสุด','ร้านที่มีจำนวนครั้งซื้อมากสุด', d.top_vendor_by_count?d.top_vendor_by_count.name:'-', d.top_vendor_by_count?(d.top_vendor_by_count.count+' ครั้ง · '+baht(d.top_vendor_by_count.satang)):'', null)}
+        ${card('แบรนด์หลัก','แบรนด์ที่ซื้อบ่อยสุด', d.top_brand_by_count?d.top_brand_by_count.name:'-', d.top_brand_by_count?(d.top_brand_by_count.count+' ครั้ง · '+baht(d.top_brand_by_count.satang)):'', null)}
       </div>
     </div>
     <div class="section"><h2>แนวโน้มการซื้อรายเดือน</h2><div class="chartbox"><canvas id="paintTrend"></canvas></div></div>

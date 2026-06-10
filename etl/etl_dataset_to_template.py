@@ -15,13 +15,7 @@ PAINT=["เงา","ด้าน","ทินเนอร์","รองพื้
 HARDWARE=["กระดาษทราย","ทราย","บานพับ","มือจับ","น็อต","สกรู","กาว","ลูกล้อ"]
 WOOD=["ประตู","บาน","วงกบ","ไม้"]
 def classify(t):
-    s=str(t)
-    if any(k in s for k in HARDWARE): return "hardware"
-    d=s.replace("X","x")
-    if "x" in d and any(ch.isdigit() for ch in d): return "wood"
-    if any(k in s for k in WOOD): return "wood"
-    if any(k in s for k in PAINT): return "paint"
-    return "paint"
+    return "paint"   # ตามที่ลูกค้าระบุ: หมวดทุกแถวเป็น paint
 def norm_date(v):
     v=str(v).strip()
     for fmt in ("%d/%m/%Y","%Y-%m-%d","%d-%m-%Y"):

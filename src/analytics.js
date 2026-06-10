@@ -619,6 +619,7 @@ export function profitByProductionType(jobs) {
 // วิเคราะห์ต้นทุนสี/วัตถุดิบ แยกราย ร้านค้า / แบรนด์ / ชนิดสี (+ รายเดือน)
 export function materialPurchaseAnalysis(purchases) {
   const amt = (p) => p.total_incl_vat_satang || 0;
+  const isUnspec = (n) => ['(ไม่ระบุ)', '-', '?', ''].includes((n || '').toString().trim());
   const total = sum(purchases, amt);
   const paintTotal = sum(purchases.filter((p) => p.category === 'paint'), amt);
   const byDim = (key) => {
@@ -628,8 +629,16 @@ export function materialPurchaseAnalysis(purchases) {
       if (!m[k]) m[k] = { name: k, satang: 0, qty: 0, count: 0 };
       m[k].satang += amt(p); m[k].qty += p.qty || 0; m[k].count += 1;
     }
-    return Object.values(m).sort((a, b) => b.satang - a.satang);
+    // (ไม่ระบุ) ไปล่างสุดเสมอ; ที่เหลือเรียงยอดซื้อมาก→น้อย
+    return Object.values(m).sort((a, b) => {
+      const au = isUnspec(a.name), bu = isUnspec(b.name);
+      if (au !== bu) return au ? 1 : -1;
+      return b.satang - a.satang;
+    });
   };
+  // ร้าน/แบรนด์หลัก = ที่มีจำนวนครั้งซื้อมากสุด (ไม่นับ "ไม่ระบุ")
+  const topByCount = (rows) => [...rows].filter((x) => !isUnspec(x.name)).sort((a, b) => b.count - a.count)[0] || null;
+  const by_vendor = byDim('vendor'), by_brand = byDim('brand');
   const byMonth = {};
   for (const p of purchases) {
     const k = ym(p.purchase_date); if (!k) continue;
@@ -639,8 +648,9 @@ export function materialPurchaseAnalysis(purchases) {
   const monthly = Object.keys(byMonth).sort().map((m) => ({ month: m, ...byMonth[m] }));
   return {
     total_satang: total, paint_total_satang: paintTotal, count: purchases.length,
-    by_vendor: byDim('vendor'), by_brand: byDim('brand'), by_type: byDim('item_type'),
-    by_category: byDim('category'), monthly,
+    by_vendor, by_brand, by_type: byDim('item_type'), by_category: byDim('category'),
+    top_vendor_by_count: topByCount(by_vendor), top_brand_by_count: topByCount(by_brand),
+    monthly,
   };
 }
 
