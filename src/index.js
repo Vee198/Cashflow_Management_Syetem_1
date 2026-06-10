@@ -159,9 +159,11 @@ app.get('/api/dashboard', async (c) => {
     for (const i of invoices) { if (i.status === 'void') continue; billed += i.amount_satang; received += (i.amount_paid_satang || 0); }
     const eb = A.expenseBuckets(expenses);
     // ต้นทุนผลิต + ค่าสี ดึงจากออเดอร์ (jobs); ค่าใช้จ่ายอื่นจากชีตรายจ่าย (overhead/marketing/ads/rent)
-    let prodCost = 0, paintCost = 0;
-    for (const j of jobs) { prodCost += j.total_cost_satang || 0; paintCost += j.cost_paint_satang || 0; }
+    let jobsCost = 0, jobsPaint = 0;
+    for (const j of jobs) { jobsCost += j.total_cost_satang || 0; jobsPaint += j.cost_paint_satang || 0; }
     const overheadExp = eb.buckets.marketing + eb.buckets.ads + eb.buckets.rent + eb.buckets.overhead;
+    const prodCost = jobsCost + eb.buckets.production;            // ต้นทุนผลิต = ออเดอร์ + วัตถุดิบที่ซื้อ (ชีตรายจ่าย)
+    const paintCost = jobsPaint + (eb.by_category.paint || 0);    // ค่าสี = ออเดอร์ + ค่าสีที่ซื้อ
     const buckets = { production: prodCost, marketing: eb.buckets.marketing, ads: eb.buckets.ads, rent: eb.buckets.rent, overhead: eb.buckets.overhead };
     const ps = A.profitByProductionType(jobs);
     const jobsRevenue = ps.self.revenue + ps.outsourced.revenue;
@@ -173,8 +175,8 @@ app.get('/api/dashboard', async (c) => {
       billed_revenue_satang: billed,
       jobs_revenue_satang: jobsRevenue,
       production_cost_satang: prodCost,
-      paint_cost_satang: paintCost + (eb.by_category.paint || 0),
-      net_profit_satang: ps.total_profit - overheadExp,   // กำไรงานจริง (ผลิตเอง+สั่งซัพ) − ค่าใช้จ่ายอื่น
+      paint_cost_satang: paintCost,
+      net_profit_satang: ps.total_profit - overheadExp - eb.buckets.production,   // กำไรงาน − ค่าใช้จ่ายอื่น − วัตถุดิบที่ซื้อ
       runway: A.burnAndRunway(cashTxns, asOf, 3),
       expense_buckets: { buckets, by_category: eb.by_category, total_satang: prodCost + overheadExp },
       ar_by_customer: A.arByCustomer(invoices, customers, asOf),
