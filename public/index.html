@@ -764,8 +764,11 @@ async function tabPaintAnalysis(){
   const pctOf=(s)=>d.total_satang?Math.round(s/d.total_satang*1000)/10:0;
   const DIM={vendor:'ร้านค้า',brand:'แบรนด์',item_type:'ชนิดสี'};
   const filterBar = active.length
-    ? `<div class="card card-green" style="margin-bottom:14px"><b>🔎 กำลังกรอง:</b> ${active.map(([k,v])=>`<span class="pill pill-green" style="margin:0 4px">${DIM[k]}: ${v} <b style="cursor:pointer" onclick="setPaintFilter('${k}',null)">✕</b></span>`).join('')} &nbsp;<button class="hz-btn" onclick="clearPaintFilter()">↺ ดูทั้งหมด</button></div>`
-    : `<div class="muted" style="font-size:12px;margin-bottom:10px">💡 คลิกที่ <b>แบรนด์ในกราฟ</b> หรือ <b>แถวในตาราง</b> เพื่อกรองทั้งหน้าให้เหลือเฉพาะรายการนั้น (Interactive)</div>`;
+    ? `<div class="card card-green" style="margin-bottom:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <button class="primary" style="padding:9px 20px;font-size:14px" onclick="clearPaintFilter()">✕ ล้างตัวกรอง / ดูทั้งหมด</button>
+        <span><b>🔎 กำลังกรอง:</b> ${active.map(([k,v])=>`<span class="pill pill-green" style="margin:0 4px">${DIM[k]}: ${v} <b style="cursor:pointer" title="เอาตัวกรองนี้ออก" onclick="setPaintFilter('${k}',null)">✕</b></span>`).join('')}</span>
+       </div>`
+    : `<div class="muted" style="font-size:12px;margin-bottom:10px">💡 คลิกที่ <b>แบรนด์ในกราฟ</b> หรือ <b>แถวในตาราง</b> เพื่อกรองทั้งหน้า (Interactive) — เมื่อกรองแล้วจะมีปุ่ม <b>"✕ ล้างตัวกรอง"</b> สีเขียวให้กดกลับเป็นทั้งหมด</div>`;
   const tbl=(rows,dim,label)=>`<div class="card" style="flex:1;min-width:280px"><h3>${label}</h3><div style="overflow:auto"><table><thead><tr><th>${label}</th><th>ยอดซื้อ</th><th>%</th><th>ครั้ง</th></tr></thead><tbody>${rows.slice(0,12).map(x=>`<tr style="cursor:pointer" title="คลิกเพื่อกรอง" onclick="setPaintFilter('${dim}',decodeURIComponent('${encodeURIComponent(x.name)}'))"><td>${x.name}</td><td>${baht(x.satang)}</td><td>${pct(pctOf(x.satang))}</td><td>${x.count}</td></tr>`).join('')}</tbody></table></div></div>`;
   setMain(`
     <div class="section"><h2>วิเคราะห์ต้นทุนสี/วัตถุดิบ ${tip('คลิกแบรนด์/ร้าน/ชนิด เพื่อกรองทั้งหน้า — กราฟและการ์ดจะเปลี่ยนตาม')}</h2>

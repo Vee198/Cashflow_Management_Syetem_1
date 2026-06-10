@@ -113,7 +113,7 @@
 - **หมวด (category) = `paint` ทุกแถว** (ตามที่ลูกค้าระบุ — ETL classify คืน paint เสมอ)
 - ใช้ `total_incl_vat` (รวมภาษี) เป็นยอด
 - **ตารางเรียง มาก→น้อย เสมอ และดัน "(ไม่ระบุ)" ไปล่างสุด** (`isUnspec`); การ์ด "ร้าน/แบรนด์หลัก" = ที่มี **จำนวนครั้งซื้อมากสุด** (ไม่นับไม่ระบุ) ผ่าน `top_vendor_by_count`/`top_brand_by_count`
-- **Interactive:** คลิกแบรนด์ในโดนัท หรือแถวในตาราง → กรองทั้งหน้า (`state.paintFilter` → `/api/paint-analysis?vendor=&brand=&item_type=` → re-render); มี filter chip + "ดูทั้งหมด" ล้างกรอง
+- **Interactive:** คลิกแบรนด์ในโดนัท หรือแถวในตาราง → กรองทั้งหน้า (`state.paintFilter` → `/api/paint-analysis?vendor=&brand=&item_type=` → re-render); เมื่อกรองแล้วมี **ปุ่มหลักสีเขียวเด่น "✕ ล้างตัวกรอง / ดูทั้งหมด"** (`clearPaintFilter`) + chip ลบทีละตัว (`setPaintFilter(dim,null)`)
 - **โดนัท/พายไม่มีแกน x/y** — `mkChart()` ตัด `options.scales` ออกอัตโนมัติเมื่อ type เป็น doughnut/pie
 - **ภาษาคน:** "ค่าสีเดือนนี้ซื้อจากร้านไหน แบรนด์อะไร ชนิดไหนเปลืองสุด" — ใช้ตัดสินใจต่อรองราคา/เปลี่ยนเจ้า
 
