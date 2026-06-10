@@ -161,7 +161,7 @@ const pct = (v)=> (v==null?'-':v.toLocaleString('th-TH',{maximumFractionDigits:1
 const flowNote = (net)=> net<=0 ? `เงินเข้าสุทธิ +${baht(-net)}/เดือน` : `เผาเงินสุทธิ −${baht(net)}/เดือน`;
 const bahtN = (x)=>'฿'+Math.round(x||0).toLocaleString('th-TH'); // บาทตรงๆ (ไม่ใช่สตางค์) สำหรับเครื่องคิดเลข BOM
 const authHdr = ()=>({'Authorization':'Bearer '+(state.token||'')});
-const ENTITIES = ['order','customers','suppliers','jobs','job_costs','invoices','bills','inventory_items','inventory_movements','expenses','cash_transactions','budgets','employees','payslips'];
+const ENTITIES = ['order','customers','suppliers','jobs','job_costs','invoices','bills','inventory_items','inventory_movements','expenses','cash_transactions','budgets','employees','payslips','material_purchases'];
 const pill = (st)=> `<span class="pill pill-${st}">${st==='green'?'ปกติ':st==='yellow'?'เฝ้าระวัง':'เสี่ยง'}</span>`;
 const dot = (st)=> `<span class="badge bdot-${st}"></span>`;
 const tip = (t)=> `<span class="tip" data-tip="${t}">?</span>`;
@@ -179,6 +179,7 @@ const TABS = [
   {id:'cash', label:'เงินสด & สภาพคล่อง', adv:false},
   {id:'aging', label:'อายุหนี้ (AR/AP)', adv:false},
   {id:'cost', label:'ต้นทุน & ค่าสี', adv:false},
+  {id:'paint', label:'วิเคราะห์ค่าสี', adv:false},
   {id:'bom', label:'BOM / ตั้งราคา', adv:false},
   {id:'production', label:'การผลิต', adv:false},
   {id:'payroll', label:'เงินเดือน', adv:false},
@@ -223,6 +224,7 @@ async function route(){
     if(state.tab==='cash') return await tabCash();
     if(state.tab==='aging') return await tabAging();
     if(state.tab==='cost') return await tabCost();
+    if(state.tab==='paint') return await tabPaintAnalysis();
     if(state.tab==='bom') return tabBOM();
     if(state.tab==='production') return await tabProduction();
     if(state.tab==='inventory') return await tabInventory();
@@ -748,6 +750,34 @@ async function tabAdvisor(){
   mkChart('concChart',{type:'doughnut',data:{labels:conc.rows.map(x=>x.customer),datasets:[{data:conc.rows.map(x=>x.satang/100),backgroundColor:['#5a9d77','#9a6a43','#c9aa63','#d4694c','#7cb295','#b0a48f']}]},options:chartOpts('สัดส่วนยอดขายตามลูกค้า')});
 }
 
+// ── วิเคราะห์ต้นทุนสี/วัตถุดิบ (จาก material_purchases) ──────
+async function tabPaintAnalysis(){
+  const d=await api('/paint-analysis');
+  if(!d.count){ setMain('<div class="section"><h2>วิเคราะห์ค่าสี</h2><div class="card"><span class="muted">ยังไม่มีข้อมูลการซื้อสี/วัตถุดิบ — อัปโหลดชีต material_purchases ผ่านแท็บนำเข้าข้อมูล (ใช้ ETL etl_dataset_to_template.py)</span></div></div>'); return; }
+  const pctOf=(s)=>d.total_satang?Math.round(s/d.total_satang*1000)/10:0;
+  const tbl=(rows,label)=>`<div class="card" style="flex:1;min-width:280px"><h3>${label} (สูงสุด ${Math.min(rows.length,12)})</h3><div style="overflow:auto"><table><thead><tr><th>${label}</th><th>ยอดซื้อ</th><th>%</th><th>ครั้ง</th></tr></thead><tbody>${rows.slice(0,12).map(x=>`<tr><td>${x.name}</td><td>${baht(x.satang)}</td><td>${pct(pctOf(x.satang))}</td><td>${x.count}</td></tr>`).join('')}</tbody></table></div></div>`;
+  setMain(`
+    <div class="section"><h2>วิเคราะห์ต้นทุนสี/วัตถุดิบ ${tip('จากประวัติการซื้อจริง แยกราย ร้านค้า / แบรนด์ / ชนิดสี')}</h2>
+      <div class="grid cards">
+        ${card('ยอดซื้อทั้งหมด','รวมทุกหมวด (รวมภาษี)', baht(d.total_satang), d.count+' รายการ', null)}
+        ${card('ค่าสี (paint)','เฉพาะหมวดสี', baht(d.paint_total_satang), pct(pctOf(d.paint_total_satang))+' ของยอดซื้อ', null)}
+        ${card('ร้านที่ซื้อเยอะสุด','', d.by_vendor[0]?d.by_vendor[0].name:'-', d.by_vendor[0]?baht(d.by_vendor[0].satang):'', null)}
+        ${card('แบรนด์หลัก','', d.by_brand[0]?d.by_brand[0].name:'-', d.by_brand[0]?baht(d.by_brand[0].satang):'', null)}
+      </div>
+    </div>
+    <div class="section"><h2>แนวโน้มการซื้อรายเดือน</h2><div class="chartbox"><canvas id="paintTrend"></canvas></div></div>
+    <div class="section"><h2>แยกตามร้านค้า / แบรนด์ / ชนิดสี</h2>
+      <div class="row">${tbl(d.by_vendor,'ร้านค้า')}${tbl(d.by_brand,'แบรนด์')}</div>
+      <div class="row" style="margin-top:14px">${tbl(d.by_type,'ชนิดสี')}<div class="chartbox" style="flex:1;min-width:280px"><canvas id="paintBrand"></canvas></div></div>
+    </div>
+  `);
+  mkChart('paintTrend',{type:'bar',data:{labels:d.monthly.map(x=>x.month),datasets:[
+    {label:'ค่าสี',data:d.monthly.map(x=>x.paint/100),backgroundColor:'#d4694c'},
+    {label:'วัตถุดิบอื่น',data:d.monthly.map(x=>x.other/100),backgroundColor:'#9a6a43'}
+  ]},options:chartOpts('ยอดซื้อรายเดือน (ค่าสี vs วัตถุดิบอื่น)')});
+  mkChart('paintBrand',{type:'doughnut',data:{labels:d.by_brand.slice(0,6).map(x=>x.name),datasets:[{data:d.by_brand.slice(0,6).map(x=>x.satang/100),backgroundColor:['#5a9d77','#9a6a43','#d4694c','#c9aa63','#7cb295','#b0a48f']}]},options:chartOpts('สัดส่วนยอดซื้อตามแบรนด์')});
+}
+
 // ── เฟส 4: BOM / เครื่องคำนวณราคาขาย (client-side) ──────────
 function bomOut(label,id,color){return `<div class="card" style="padding:12px"><h3 style="margin-bottom:2px">${label}</h3><div class="big" style="font-size:20px;${color?'color:var(--'+color+')':''}" id="${id}">—</div></div>`;}
 function runBOM(){
@@ -883,11 +913,16 @@ async function importExcel(file){
       const rows=aoa.slice(2).map(arr=>{const o={};keys.forEach((k,i)=>{if(k!=null&&String(k).trim()!==''){let v=arr[i]; if(v instanceof Date) v=v.toISOString().slice(0,10); o[String(k).trim()]=v;}});return o;})
         .filter(o=>o.external_id!=null&&String(o.external_id).trim()!=='');
       if(!rows.length) continue;
-      msg.textContent=`กำลังนำเข้า ${sn} (${rows.length} แถว)…`;
-      const r=await fetch('/api/import',{method:'POST',headers:{'Content-Type':'application/json',...authHdr()},body:JSON.stringify({source,entity:sn,rows})});
-      const j=await r.json();
-      if(j.ok){ total.inserted+=j.data.inserted; total.updated+=j.data.updated; total.skipped+=j.data.skipped; total.sheets++; if(j.data.errors&&j.data.errors.length) total.errors.push(...j.data.errors.map(e=>sn+': '+e.error)); }
-      else total.errors.push(sn+': '+j.error);
+      total.sheets++;
+      const CHUNK=400;                                  // ทยอยส่งทีละ 400 แถว กัน Worker timeout
+      for(let off=0; off<rows.length; off+=CHUNK){
+        const part=rows.slice(off,off+CHUNK);
+        msg.textContent=`กำลังนำเข้า ${sn} (${Math.min(off+CHUNK,rows.length)}/${rows.length} แถว)…`;
+        const r=await fetch('/api/import',{method:'POST',headers:{'Content-Type':'application/json',...authHdr()},body:JSON.stringify({source,entity:sn,rows:part})});
+        const j=await r.json();
+        if(j.ok){ total.inserted+=j.data.inserted; total.updated+=j.data.updated; total.skipped+=j.data.skipped; if(j.data.errors&&j.data.errors.length) total.errors.push(...j.data.errors.map(e=>sn+': '+e.error)); }
+        else total.errors.push(sn+': '+j.error);
+      }
     }
     msg.innerHTML=`✓ นำเข้าเสร็จ — ${total.sheets} ชีต · เพิ่ม ${total.inserted} · แก้ ${total.updated} · ข้าม ${total.skipped}`+(total.errors.length?`<br><span style="color:var(--red)">ปัญหา ${total.errors.length} รายการ: ${total.errors.slice(0,3).join('; ')}</span>`:'<br>ดูประวัติได้ที่แท็บ "ประวัติ/เวอร์ชัน"');
   }catch(e){ msg.textContent='ผิดพลาด: '+e.message; }

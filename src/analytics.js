@@ -616,6 +616,34 @@ export function profitByProductionType(jobs) {
   };
 }
 
+// วิเคราะห์ต้นทุนสี/วัตถุดิบ แยกราย ร้านค้า / แบรนด์ / ชนิดสี (+ รายเดือน)
+export function materialPurchaseAnalysis(purchases) {
+  const amt = (p) => p.total_incl_vat_satang || 0;
+  const total = sum(purchases, amt);
+  const paintTotal = sum(purchases.filter((p) => p.category === 'paint'), amt);
+  const byDim = (key) => {
+    const m = {};
+    for (const p of purchases) {
+      const k = (p[key] || '(ไม่ระบุ)').toString().trim() || '(ไม่ระบุ)';
+      if (!m[k]) m[k] = { name: k, satang: 0, qty: 0, count: 0 };
+      m[k].satang += amt(p); m[k].qty += p.qty || 0; m[k].count += 1;
+    }
+    return Object.values(m).sort((a, b) => b.satang - a.satang);
+  };
+  const byMonth = {};
+  for (const p of purchases) {
+    const k = ym(p.purchase_date); if (!k) continue;
+    if (!byMonth[k]) byMonth[k] = { paint: 0, other: 0 };
+    if (p.category === 'paint') byMonth[k].paint += amt(p); else byMonth[k].other += amt(p);
+  }
+  const monthly = Object.keys(byMonth).sort().map((m) => ({ month: m, ...byMonth[m] }));
+  return {
+    total_satang: total, paint_total_satang: paintTotal, count: purchases.length,
+    by_vendor: byDim('vendor'), by_brand: byDim('brand'), by_type: byDim('item_type'),
+    by_category: byDim('category'), monthly,
+  };
+}
+
 // ============================================================
 // K. Recommendation Engine + Customer Concentration (#15/#18)
 // ============================================================

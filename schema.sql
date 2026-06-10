@@ -174,6 +174,32 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
   UNIQUE(source, external_id)
 );
 
+-- ── การซื้อสี/วัตถุดิบ (เก็บทุกพารามิเตอร์จาก dataset) ───────
+CREATE TABLE IF NOT EXISTS material_purchases (
+  id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+  source                TEXT,
+  external_id           TEXT,
+  purchase_date         TEXT,                 -- วันที่
+  vendor                TEXT,                 -- ร้านค้า
+  inv_no                TEXT,                 -- เลข Inv
+  brand                 TEXT,                 -- แบรนด์
+  item_type             TEXT,                 -- ชนิดสี
+  base                  TEXT,                 -- เบส
+  color_code            TEXT,                 -- รหัสสี
+  qty                   REAL DEFAULT 0,       -- จำนวน
+  unit                  TEXT,                 -- หน่วย
+  unit_price_satang     INTEGER DEFAULT 0,    -- ราคา (ต่อหน่วย)
+  total_incl_vat_satang INTEGER DEFAULT 0,    -- ราคารวมภาษี
+  total_excl_vat_satang INTEGER DEFAULT 0,    -- ราคาก่อนภาษี
+  vat_satang            INTEGER DEFAULT 0,    -- ยอดภาษี
+  category              TEXT DEFAULT 'paint', -- paint|wood|hardware|other (จัดกลุ่ม)
+  created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(source, external_id)
+);
+CREATE INDEX IF NOT EXISTS idx_mp_date   ON material_purchases(purchase_date);
+CREATE INDEX IF NOT EXISTS idx_mp_vendor ON material_purchases(vendor);
+CREATE INDEX IF NOT EXISTS idx_mp_brand  ON material_purchases(brand);
+
 -- ── Operating expenses ──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS expenses (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,

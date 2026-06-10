@@ -24,6 +24,7 @@ export const getBudgets = (db) => all(db, `SELECT * FROM budgets`);
 export const getCustomers = (db) => all(db, `SELECT * FROM customers`);
 export const getSuppliers = (db) => all(db, `SELECT * FROM suppliers`);
 export const getEmployees = (db) => all(db, `SELECT * FROM employees`);
+export const getMaterialPurchases = (db) => all(db, `SELECT * FROM material_purchases`);
 export const getPayslips = (db) => all(db, `SELECT p.*, e.name AS emp_name, e.emp_type, e.department FROM payslips p LEFT JOIN employees e ON e.id = p.employee_id`);
 
 // รายได้ (recognized) = ยอด invoice ที่ไม่ void; รายเดือน

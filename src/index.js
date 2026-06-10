@@ -151,8 +151,8 @@ app.get('/api/dashboard', async (c) => {
   try {
     const db = c.env.DB;
     const asOf = asOfOf(c);
-    const [cashTxns, invoices, expenses, customers, budgets, jobs] = await Promise.all([
-      repo.getCashTxns(db), repo.getInvoices(db), repo.getExpenses(db), repo.getCustomers(db), repo.getBudgets(db), repo.getJobs(db),
+    const [cashTxns, invoices, expenses, customers, budgets, jobs, purchases] = await Promise.all([
+      repo.getCashTxns(db), repo.getInvoices(db), repo.getExpenses(db), repo.getCustomers(db), repo.getBudgets(db), repo.getJobs(db), repo.getMaterialPurchases(db),
     ]);
     const cash = A.cashOnHand(cashTxns).total_satang;
     let billed = 0, received = 0;
@@ -162,8 +162,10 @@ app.get('/api/dashboard', async (c) => {
     let jobsCost = 0, jobsPaint = 0;
     for (const j of jobs) { jobsCost += j.total_cost_satang || 0; jobsPaint += j.cost_paint_satang || 0; }
     const overheadExp = eb.buckets.marketing + eb.buckets.ads + eb.buckets.rent + eb.buckets.overhead;
-    const prodCost = jobsCost + eb.buckets.production;            // ต้นทุนผลิต = ออเดอร์ + วัตถุดิบที่ซื้อ (ชีตรายจ่าย)
-    const paintCost = jobsPaint + (eb.by_category.paint || 0);    // ค่าสี = ออเดอร์ + ค่าสีที่ซื้อ
+    let mpAll = 0, mpPaint = 0;
+    for (const p of purchases) { mpAll += p.total_incl_vat_satang || 0; if (p.category === 'paint') mpPaint += p.total_incl_vat_satang || 0; }
+    const prodCost = jobsCost + eb.buckets.production + mpAll;            // ต้นทุนผลิต = ออเดอร์ + รายจ่ายผลิต + วัตถุดิบที่ซื้อ
+    const paintCost = jobsPaint + (eb.by_category.paint || 0) + mpPaint;  // ค่าสี = ออเดอร์ + รายจ่ายสี + สีที่ซื้อ
     const buckets = { production: prodCost, marketing: eb.buckets.marketing, ads: eb.buckets.ads, rent: eb.buckets.rent, overhead: eb.buckets.overhead };
     const ps = A.profitByProductionType(jobs);
     const jobsRevenue = ps.self.revenue + ps.outsourced.revenue;
@@ -176,13 +178,21 @@ app.get('/api/dashboard', async (c) => {
       jobs_revenue_satang: jobsRevenue,
       production_cost_satang: prodCost,
       paint_cost_satang: paintCost,
-      net_profit_satang: ps.total_profit - overheadExp - eb.buckets.production,   // กำไรงาน − ค่าใช้จ่ายอื่น − วัตถุดิบที่ซื้อ
+      net_profit_satang: ps.total_profit - overheadExp - eb.buckets.production - mpAll,   // กำไรงาน − ค่าใช้จ่ายอื่น − วัตถุดิบ(รายจ่าย+ซื้อ)
       runway: A.burnAndRunway(cashTxns, asOf, 3),
       expense_buckets: { buckets, by_category: eb.by_category, total_satang: prodCost + overheadExp },
       ar_by_customer: A.arByCustomer(invoices, customers, asOf),
       sales_monthly: A.salesMonthly(invoices, budgets),
       production_split: ps,
     });
+  } catch (e) { return err(c, e, 500); }
+});
+
+// ---------- PAINT / MATERIAL COST ANALYSIS (วิเคราะห์ค่าสี) ----------
+app.get('/api/paint-analysis', async (c) => {
+  try {
+    const purchases = await repo.getMaterialPurchases(c.env.DB);
+    return ok(c, A.materialPurchaseAnalysis(purchases));
   } catch (e) { return err(c, e, 500); }
 });
 
@@ -383,7 +393,7 @@ app.get('/api/list/:entity', async (c) => {
   try {
     const allowed = ['customers', 'suppliers', 'jobs', 'job_costs', 'invoices', 'bills',
       'inventory_items', 'inventory_movements', 'expenses', 'cash_transactions', 'budgets',
-      'employees', 'payslips'];
+      'employees', 'payslips', 'material_purchases'];
     const entity = c.req.param('entity');
     if (!allowed.includes(entity)) throw new Error('entity ไม่ถูกต้อง');
     return ok(c, await repo.all(c.env.DB, `SELECT * FROM ${entity} ORDER BY id DESC LIMIT 500`));
@@ -394,13 +404,13 @@ app.get('/api/list/:entity', async (c) => {
 const DATE_COL = {
   invoices: 'issue_date', bills: 'issue_date', expenses: 'spent_at',
   cash_transactions: 'txn_date', job_costs: 'incurred_at', jobs: 'started_at',
-  inventory_movements: 'moved_at', payslips: 'period',
+  inventory_movements: 'moved_at', payslips: 'period', material_purchases: 'purchase_date',
 };
 app.get('/api/table/:entity', async (c) => {
   try {
     const allowed = ['customers', 'suppliers', 'jobs', 'job_costs', 'invoices', 'bills',
       'inventory_items', 'inventory_movements', 'expenses', 'cash_transactions', 'budgets',
-      'employees', 'payslips'];
+      'employees', 'payslips', 'material_purchases'];
     const entity = c.req.param('entity');
     if (!allowed.includes(entity)) throw new Error('entity ไม่ถูกต้อง');
     const from = c.req.query('from'), to = c.req.query('to');

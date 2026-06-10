@@ -118,6 +118,18 @@ const HANDLERS = {
       category: r.category, amount_satang: baht(r.amount), spent_at: r.spent_at, note: r.note ?? null,
     }),
 
+  material_purchases: async (db, r, source) =>
+    upsert(db, `material_purchases`,
+      ['purchase_date', 'vendor', 'inv_no', 'brand', 'item_type', 'base', 'color_code', 'qty', 'unit',
+       'unit_price_satang', 'total_incl_vat_satang', 'total_excl_vat_satang', 'vat_satang', 'category'],
+      source, r.external_id, {
+        purchase_date: r.purchase_date ?? null, vendor: r.vendor ?? null, inv_no: r.inv_no ?? null,
+        brand: r.brand ?? null, item_type: r.item_type ?? null, base: r.base ?? null, color_code: r.color_code ?? null,
+        qty: r.qty ?? 0, unit: r.unit ?? null,
+        unit_price_satang: baht(r.unit_price), total_incl_vat_satang: baht(r.total_incl_vat),
+        total_excl_vat_satang: baht(r.total_excl_vat), vat_satang: baht(r.vat), category: r.category ?? 'paint',
+      }),
+
   cash_transactions: async (db, r, source) =>
     upsert(db, `cash_transactions`, ['account', 'direction', 'amount_satang', 'txn_date', 'category', 'ref'],
       source, r.external_id, {
