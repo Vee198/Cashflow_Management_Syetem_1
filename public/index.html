@@ -305,7 +305,8 @@ async function renderLongRange(months){
 
 async function tabOverview(){
   const period=(state.asOf||'').slice(0,7);
-  const [d,dash,ag,fc,bud] = await Promise.all([api('/summary'), api('/dashboard'), api('/aging'), api('/forecast?months='+FCHORIZON), api('/budget?period='+period)]);
+  const dashQ = (state.from&&state.to) ? ('?from='+state.from+'&to='+state.to) : '';
+  const [d,dash,ag,fc,bud] = await Promise.all([api('/summary'), api('/dashboard'+dashQ), api('/aging'), api('/forecast?months='+FCHORIZON), api('/budget?period='+period)]);
   const r = d.runway, l = d.liquidity, c = ag.ccc;
   const revBase = dash.jobs_revenue_satang || dash.billed_revenue_satang || 0;
   const netMarginPct = revBase? Math.round(dash.net_profit_satang/revBase*1000)/10 : 0;
@@ -414,6 +415,19 @@ async function tabOverview(){
       <div class="row">
         <div class="chartbox"><canvas id="salesMonthly"></canvas></div>
         <div class="chartbox"><canvas id="expBuckets"></canvas></div>
+      </div>
+    </div>
+
+    <div class="section"><h2>สรุปต้นทุน (COGS) &amp; ค่าใช้จ่ายดำเนินงาน (OH) ${tip('COGS = ต้นทุนผลิตทั้งหมด (ไม้/สี/แรง/ส่ง/วัตถุดิบที่ซื้อ) · OH = ค่าใช้จ่ายดำเนินงาน (เช่า/น้ำไฟ/การตลาด/Ads/ขนส่ง/อื่นๆ)')}</h2>
+      <div class="row">
+        <div class="card card-neutral" style="flex:1;min-width:300px"><h3>💰 ต้นทุนขาย (COGS) รวม <span style="color:var(--accent-d);font-family:var(--serif)">${baht(dash.cogs_total_satang)}</span></h3>
+          <table><thead><tr><th>หมวดย่อย</th><th>จำนวนเงิน</th><th>%</th></tr></thead><tbody>
+          ${dash.cogs_breakdown.length?dash.cogs_breakdown.map(x=>`<tr><td>${x.name}</td><td>${baht(x.satang)}</td><td>${pct(dash.cogs_total_satang?Math.round(x.satang/dash.cogs_total_satang*1000)/10:0)}</td></tr>`).join(''):'<tr><td colspan=3 class="muted">ยังไม่มีข้อมูลต้นทุน</td></tr>'}
+          </tbody></table></div>
+        <div class="card card-neutral" style="flex:1;min-width:300px"><h3>🏢 ค่าใช้จ่ายดำเนินงาน (OH) รวม <span style="color:var(--wood-d);font-family:var(--serif)">${baht(dash.oh_total_satang)}</span></h3>
+          <table><thead><tr><th>หมวดย่อย</th><th>จำนวนเงิน</th><th>%</th></tr></thead><tbody>
+          ${dash.oh_breakdown.length?dash.oh_breakdown.map(x=>`<tr><td>${x.name}</td><td>${baht(x.satang)}</td><td>${pct(dash.oh_total_satang?Math.round(x.satang/dash.oh_total_satang*1000)/10:0)}</td></tr>`).join(''):'<tr><td colspan=3 class="muted">ยังไม่มีค่าใช้จ่าย OH</td></tr>'}
+          </tbody></table></div>
       </div>
     </div>
 
@@ -567,6 +581,7 @@ async function tabPayroll(){
   const s=d.summary, slips=d.payslips;
   setMain(`
     <div class="section"><h2>เงินเดือน & ค่าแรง — ${d.period} ${tip('รวมพนักงานประจำ + พาร์ทไทม์ + OT + ภาษีหัก ณ ที่จ่าย + ประกันสังคม')}</h2>
+      ${d.from_employees?'<div class="muted" style="font-size:12px;margin-bottom:8px">* คำนวณจากเงินเดือนในชีตพนักงาน (ยังไม่มีสลิปรายเดือน) — ประกันสังคมคิด 5% สูงสุด 750/คน</div>':''}
       <div class="grid cards">
         ${card('พนักงานทั้งหมด','จำนวนคนที่จ่ายรอบนี้', s.headcount+' คน', `ประจำ ${s.full_time_count} · พาร์ทไทม์ ${s.part_time_count}`, null)}
         ${card('ค่าจ้างรวม (Gross)','ก่อนหักภาษี/ประกันสังคม', baht(s.total_gross_satang), `ฐาน ${baht(s.total_base_satang)} + OT ${baht(s.total_ot_satang)}`, null)}
@@ -918,7 +933,7 @@ async function importExcel(file){
   try{
     const buf=await file.arrayBuffer();
     const wb=XLSX.read(buf,{type:'array',cellDates:true});
-    const source='excel_'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'');
+    const source='excel_'+(file.name||'upload').replace(/[^a-zA-Z0-9_.-]/g,'_'); // source ตามชื่อไฟล์ → อัปไฟล์เดิมซ้ำ = upsert ไม่เบิ้ล
     const total={inserted:0,updated:0,skipped:0,sheets:0,errors:[]};
     for(const sn of wb.SheetNames){            // ลำดับชีตในไฟล์ = ลำดับ dependency ที่ถูกต้องอยู่แล้ว
       if(!ENTITIES.includes(sn)) continue;
@@ -1076,8 +1091,8 @@ document.getElementById('asOf').onchange = (e)=>{ state.asOf=e.target.value; rou
 state.from = state.asOf.slice(0,4)+'-01-01'; state.to = state.asOf;
 const _df=document.getElementById('dateFrom'), _dt=document.getElementById('dateTo');
 _df.value=state.from; _dt.value=state.to;
-_df.onchange=(e)=>{ state.from=e.target.value; if(state.tab==='data') loadDataTable(); };
-_dt.onchange=(e)=>{ state.to=e.target.value; if(state.tab==='data') loadDataTable(); };
+_df.onchange=(e)=>{ state.from=e.target.value; route(); };   // เปลี่ยนช่วงวันที่ → re-render หน้าปัจจุบัน (กรอง dashboard ด้วย)
+_dt.onchange=(e)=>{ state.to=e.target.value; route(); };
 document.querySelectorAll('#modeToggle button').forEach(b=> b.onclick=()=>{
   state.mode=b.dataset.mode;
   document.querySelectorAll('#modeToggle button').forEach(x=>x.classList.toggle('active',x===b));

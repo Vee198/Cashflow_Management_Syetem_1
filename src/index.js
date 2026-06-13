@@ -155,22 +155,45 @@ app.get('/api/dashboard', async (c) => {
       repo.getCashTxns(db), repo.getInvoices(db), repo.getExpenses(db), repo.getCustomers(db), repo.getBudgets(db), repo.getJobs(db), repo.getMaterialPurchases(db),
     ]);
     const cash = A.cashOnHand(cashTxns).total_satang;
+    // ── ตัวกรองช่วงวันที่ (from–to) กรองข้อมูลเชิงงวด (ยอดขาย/ต้นทุน/ค่าสี/กำไร); เงินสดในมือ = ยอดคงเหลือปัจจุบัน ไม่กรอง ──
+    const from = c.req.query('from'), to = c.req.query('to');
+    const rng = from && to;
+    const inR = (d) => !rng || (d && d >= from && d <= to);
+    const invF = rng ? invoices.filter((i) => inR(i.issue_date)) : invoices;
+    const expF = rng ? expenses.filter((e) => inR(e.spent_at)) : expenses;
+    const jobF = rng ? jobs.filter((j) => inR(j.started_at)) : jobs;
+    const purF = rng ? purchases.filter((p) => inR(p.purchase_date)) : purchases;
     let billed = 0, received = 0;
-    for (const i of invoices) { if (i.status === 'void') continue; billed += i.amount_satang; received += (i.amount_paid_satang || 0); }
-    const eb = A.expenseBuckets(expenses);
-    // ต้นทุนผลิต + ค่าสี ดึงจากออเดอร์ (jobs); ค่าใช้จ่ายอื่นจากชีตรายจ่าย (overhead/marketing/ads/rent)
-    let jobsCost = 0, jobsPaint = 0;
-    for (const j of jobs) { jobsCost += j.total_cost_satang || 0; jobsPaint += j.cost_paint_satang || 0; }
+    for (const i of invF) { if (i.status === 'void') continue; billed += i.amount_satang; received += (i.amount_paid_satang || 0); }
+    const eb = A.expenseBuckets(expF);
+    let jobsCost = 0, jobsPaint = 0, jw = 0, jl = 0, jsh = 0;
+    for (const j of jobF) { jobsCost += j.total_cost_satang || 0; jobsPaint += j.cost_paint_satang || 0; jw += j.cost_wood_satang || 0; jl += j.cost_labor_satang || 0; jsh += j.cost_shipping_satang || 0; }
     const overheadExp = eb.buckets.marketing + eb.buckets.ads + eb.buckets.rent + eb.buckets.overhead;
     let mpAll = 0, mpPaint = 0;
-    for (const p of purchases) { mpAll += p.total_incl_vat_satang || 0; if (p.category === 'paint') mpPaint += p.total_incl_vat_satang || 0; }
-    const prodCost = jobsCost + eb.buckets.production + mpAll;            // ต้นทุนผลิต = ออเดอร์ + รายจ่ายผลิต + วัตถุดิบที่ซื้อ
-    const paintCost = jobsPaint + (eb.by_category.paint || 0) + mpPaint;  // ค่าสี = ออเดอร์ + รายจ่ายสี + สีที่ซื้อ
+    for (const p of purF) { mpAll += p.total_incl_vat_satang || 0; if (p.category === 'paint') mpPaint += p.total_incl_vat_satang || 0; }
+    const prodCost = jobsCost + eb.buckets.production + mpAll;            // COGS = ออเดอร์ + รายจ่ายผลิต + วัตถุดิบที่ซื้อ
+    const paintCost = jobsPaint + (eb.by_category.paint || 0) + mpPaint;
     const buckets = { production: prodCost, marketing: eb.buckets.marketing, ads: eb.buckets.ads, rent: eb.buckets.rent, overhead: eb.buckets.overhead };
-    const ps = A.profitByProductionType(jobs);
+    const ps = A.profitByProductionType(jobF);
     const jobsRevenue = ps.self.revenue + ps.outsourced.revenue;
+    const xb = eb.by_category;
+    const cogs_breakdown = [
+      { name: 'ค่าสี', satang: paintCost },
+      { name: 'ค่าไม้', satang: jw + (xb.wood || 0) },
+      { name: 'ค่าแรง', satang: jl + (xb.labor || 0) },
+      { name: 'ค่าส่ง', satang: jsh },
+      { name: 'วัตถุดิบอื่น/ฮาร์ดแวร์', satang: (mpAll - mpPaint) + (xb.hardware || 0) },
+    ].filter((x) => x.satang > 0).sort((a, b) => b.satang - a.satang);
+    const oh_breakdown = [
+      { name: 'ค่าเช่า', satang: xb.rent || 0 },
+      { name: 'ค่าน้ำ-ไฟ', satang: xb.utility || 0 },
+      { name: 'การตลาด', satang: xb.marketing || 0 },
+      { name: 'โฆษณา (Ads)', satang: xb.ads || 0 },
+      { name: 'ค่าขนส่ง', satang: xb.transport || 0 },
+      { name: 'อื่นๆ', satang: (xb.other || 0) + (xb.overhead || 0) },
+    ].filter((x) => x.satang > 0).sort((a, b) => b.satang - a.satang);
     return ok(c, {
-      as_of: asOf,
+      as_of: asOf, from: from || null, to: to || null,
       cash_on_hand_satang: cash,
       received_satang: received,
       outstanding_satang: billed - received,
@@ -178,11 +201,13 @@ app.get('/api/dashboard', async (c) => {
       jobs_revenue_satang: jobsRevenue,
       production_cost_satang: prodCost,
       paint_cost_satang: paintCost,
-      net_profit_satang: ps.total_profit - overheadExp - eb.buckets.production - mpAll,   // กำไรงาน − ค่าใช้จ่ายอื่น − วัตถุดิบ(รายจ่าย+ซื้อ)
+      net_profit_satang: ps.total_profit - overheadExp - eb.buckets.production - mpAll,
+      cogs_total_satang: prodCost, cogs_breakdown,
+      oh_total_satang: overheadExp, oh_breakdown,
       runway: A.burnAndRunway(cashTxns, asOf, 3),
       expense_buckets: { buckets, by_category: eb.by_category, total_satang: prodCost + overheadExp },
-      ar_by_customer: A.arByCustomer(invoices, customers, asOf),
-      sales_monthly: A.salesMonthly(invoices, budgets),
+      ar_by_customer: A.arByCustomer(invF, customers, asOf),
+      sales_monthly: A.salesMonthly(invF, budgets),
       production_split: ps,
     });
   } catch (e) { return err(c, e, 500); }
@@ -310,10 +335,22 @@ app.get('/api/payroll', async (c) => {
   try {
     const db = c.env.DB;
     const period = c.req.query('period') || (state_default_period());
-    const [payslips, employees] = await Promise.all([repo.getPayslips(db), repo.getEmployees(db)]);
+    const [payslipsRaw, employees] = await Promise.all([repo.getPayslips(db), repo.getEmployees(db)]);
     const revByMonth = await repo.getRevenueByMonth(db);
+    // ถ้าไม่มีสลิปของเดือนนี้ → สร้างจากเงินเดือนในชีตพนักงาน (employees.base_salary) + คิด ปกส. 5% สูงสุด 750
+    let payslips = payslipsRaw, fromEmployees = false;
+    if (!payslipsRaw.some((p) => p.period === period) && employees.length) {
+      fromEmployees = true;
+      const sso = (g) => Math.min(75000, Math.round((g || 0) * 0.05));
+      payslips = employees.filter((e) => e.status !== 'inactive').map((e) => {
+        const base = e.base_salary_satang || 0;
+        return { employee_id: e.id, emp_name: e.name, emp_type: e.emp_type, department: e.department, period,
+          base_pay_satang: base, ot_pay_satang: 0, gross_satang: base, tax_satang: 0, sso_satang: sso(base),
+          other_deduction_satang: 0, net_satang: base - sso(base), employer_sso_satang: sso(base) };
+      });
+    }
     return ok(c, {
-      period,
+      period, from_employees: fromEmployees,
       summary: A.payrollSummary(payslips, period, revByMonth[period] || 0),
       all_time: A.payrollSummary(payslips, null, await repo.getTotalRevenue(db)),
       employees,

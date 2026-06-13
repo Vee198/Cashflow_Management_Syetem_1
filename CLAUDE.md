@@ -147,6 +147,10 @@ npx wrangler deploy
   - ข้อมูลหน้านี้มาจาก **`/api/dashboard`** — **ต้นทุนผลิต + ค่าสี = ออเดอร์ (`jobs.total_cost`/`cost_paint`) + วัตถุดิบที่ซื้อ (รายจ่ายหมวด paint/wood/hardware/labor)**; **ค่าใช้จ่ายอื่น (OH/ตลาด/Ads/เช่า) จากชีตรายจ่าย**; **กำไรสุทธิ = กำไรงาน − ค่าใช้จ่ายอื่น − วัตถุดิบที่ซื้อ**; margin/ค่าสี% อิงรายได้จากงาน (`jobs_revenue`)
   - **ตาราง `material_purchases` (เก็บทุกพารามิเตอร์การซื้อสี):** วันที่/ร้านค้า/Inv/แบรนด์/ชนิดสี/เบส/รหัสสี/จำนวน/หน่วย/ราคา/รวมภาษี/ก่อนภาษี/VAT/หมวด → ชีต **material_purchases** ใน Template + แท็บ **"วิเคราะห์ค่าสี"** (`/api/paint-analysis`, `A.materialPurchaseAnalysis`) แยกราย **ร้านค้า/แบรนด์/ชนิดสี** + แนวโน้มรายเดือน — **หมวด=paint ทุกแถว, ตารางเรียงมาก→น้อย (ไม่ระบุล่างสุด), การ์ดร้าน/แบรนด์หลัก = จำนวนครั้งมากสุด**
   - dashboard นับ `material_purchases` (หมวด paint→ค่าสี, ทั้งหมด→ต้นทุนผลิต) ด้วย
+  - **การ์ดสรุป COGS / OH แตกย่อย:** ภาพรวมมีตาราง COGS รวม (ไม้/สี/แรง/ส่ง/วัตถุดิบ) + OH รวม (เช่า/น้ำไฟ/การตลาด/Ads/ขนส่ง/อื่นๆ) — `cogs_breakdown`/`oh_breakdown` ใน `/api/dashboard`
+  - **Date range กรองทั้ง dashboard:** `/api/dashboard?from=&to=` กรอง invoices/expenses/jobs/material ตามช่วง (เงินสดในมือ=ยอดคงเหลือปัจจุบัน ไม่กรอง); เปลี่ยน from/to บน header → re-render ภาพรวมทันที
+  - **กันข้อมูลซ้ำ:** อัปโหลด Excel ใช้ `source` ตามชื่อไฟล์ → อัปไฟล์เดิมซ้ำ = upsert ไม่เบิ้ล; ล้างของซ้ำเดิมด้วย `clear_imported.sql` (เก็บ material_purchases)
+  - **เงินเดือน:** ถ้าไม่มี payslip รายเดือน ระบบสร้างสลิปจาก `employees.base_salary` ให้ (คิด ปกส. 5% สูงสุด 750) — `from_employees:true`
   - **ETL (`etl/etl_dataset_to_template.py`):** อ่าน `dataset.csv` → กรอกชีต material_purchases **แบบละเอียดทุกแถว/ทุกคอลัมน์** + จัดหมวดอัตโนมัติ; การอัปโหลดในเว็บ **ทยอยส่งทีละ 400 แถว** (กัน Worker timeout เมื่อมีพันแถว)
 - **Financial Score (เต็ม 5):** เฉลี่ยจาก 6 ตัวชี้วัด — Gross Margin, Current Ratio, DIO, CCC, Runway, DSO (ฟังก์ชัน `financialScore()`); แสดงดาว + แถบย่อยรายตัว
 - **พยากรณ์กระแสเงินสด:** การ์ด 13 สัปดาห์ (มีสีสถานะ) + ระยะยาวเลือกช่วง **3/6/9/12/24/36 เดือน** (`renderLongRange()`, `/api/forecast?months=`) แบบ **Base/Best/Worst case**
