@@ -154,7 +154,7 @@
 // ============================================================
 // state & helpers
 // ============================================================
-const state = { mode:'basic', tab:'overview', asOf:new Date().toISOString().slice(0,10), from:null, to:null, dataEntity:'invoices', paintFilter:{} };
+const state = { mode:'basic', tab:'overview', asOf:new Date().toISOString().slice(0,10), from:null, to:null, dataEntity:'invoices', paintFilter:{}, paintFrom:null, paintTo:null };
 const charts = {};
 const baht = (s)=> (s==null?'-':'฿'+(Math.round(s)/100).toLocaleString('th-TH',{maximumFractionDigits:0}));
 const pct = (v)=> (v==null?'-':v.toLocaleString('th-TH',{maximumFractionDigits:1})+'%');
@@ -770,12 +770,65 @@ async function tabAdvisor(){
 // ── วิเคราะห์ต้นทุนสี/วัตถุดิบ (จาก material_purchases) ──────
 function setPaintFilter(dim,val){ state.paintFilter=state.paintFilter||{}; if(val) state.paintFilter[dim]=val; else delete state.paintFilter[dim]; tabPaintAnalysis(); }
 function clearPaintFilter(){ state.paintFilter={}; tabPaintAnalysis(); }
+function setPaintDate(from,to){ state.paintFrom=from; state.paintTo=to; tabPaintAnalysis(); }
+function setPaintCmpMetric(m){
+  window.__cmpMetric=m;
+  const bp=document.getElementById('cmpMpaint'), ba=document.getElementById('cmpMall');
+  if(bp){ bp.style.background=m==='paint'?'var(--green)':''; bp.style.color=m==='paint'?'#fff':''; bp.style.borderColor=m==='paint'?'var(--green)':''; }
+  if(ba){ ba.style.background=m==='all'?'var(--green)':''; ba.style.color=m==='all'?'#fff':''; ba.style.borderColor=m==='all'?'var(--green)':''; }
+  runPaintCompare();
+}
+function runPaintCompare(){
+  const data=window.__pmonthly||[];
+  const metric=window.__cmpMetric||'paint';                    // 'paint' = ค่าสี | 'all' = ยอดซื้อรวม
+  const val=z=> metric==='all' ? (z.paint+(z.other||0)) : z.paint;
+  const mLabel=metric==='all'?'ยอดซื้อรวม':'ค่าสี';
+  const gv=id=>{const e=document.getElementById(id);return e?e.value:'';};
+  let a0=gv('cmpAfrom'),a1=gv('cmpAto'); if(a0>a1){const t=a0;a0=a1;a1=t;}
+  let b0=gv('cmpBfrom'),b1=gv('cmpBto'); if(b0>b1){const t=b0;b0=b1;b1=t;}
+  const inR=(m,x,y)=>m>=x&&m<=y;
+  const la=data.filter(z=>inR(z.month,a0,a1)), lb=data.filter(z=>inR(z.month,b0,b1));
+  const sa=la.reduce((s,z)=>s+val(z),0)/100, sb=lb.reduce((s,z)=>s+val(z),0)/100;
+  const aa=la.length?sa/la.length:0, ab=lb.length?sb/lb.length:0;
+  const diff=sa?(sb-sa)/sa*100:0;
+  const labA=a0===a1?a0:a0+' … '+a1, labB=b0===b1?b0:b0+' … '+b1;
+  const dcol=diff>0?'var(--red)':'var(--green)', darr=diff>0?'▲':(diff<0?'▼':'—');
+  const sum=document.getElementById('cmpSummary');
+  if(sum) sum.innerHTML=`<div class="grid cards">
+    <div class="card"><h3 style="color:#d4694c">● กลุ่ม A · ${labA}</h3><div class="big" style="font-size:22px">${bahtN(sa)}</div><div class="muted">${mLabel} · ${la.length} เดือน · เฉลี่ย ${bahtN(aa)}/เดือน</div></div>
+    <div class="card"><h3 style="color:#5a9d77">● กลุ่ม B · ${labB}</h3><div class="big" style="font-size:22px">${bahtN(sb)}</div><div class="muted">${mLabel} · ${lb.length} เดือน · เฉลี่ย ${bahtN(ab)}/เดือน</div></div>
+    <div class="card"><h3>ผลต่าง (B เทียบ A)</h3><div class="big" style="font-size:22px;color:${dcol}">${darr} ${diff>0?'+':''}${diff.toFixed(1)}%</div><div class="muted">${bahtN(sb-sa)} ${diff>0?'· '+mLabel+'เพิ่มขึ้น':(diff<0?'· '+mLabel+'ลดลง':'')}</div></div>
+  </div>`;
+  const maxLen=Math.max(la.length,lb.length,1);
+  const labels=Array.from({length:maxLen},(_,i)=>'เดือนที่ '+(i+1));
+  mkChart('paintCompare',{type:'bar',data:{labels,datasets:[
+    {label:'A: '+labA,data:Array.from({length:maxLen},(_,i)=>la[i]?Math.round(val(la[i])/100):null),backgroundColor:'#d4694c'},
+    {label:'B: '+labB,data:Array.from({length:maxLen},(_,i)=>lb[i]?Math.round(val(lb[i])/100):null),backgroundColor:'#5a9d77'}
+  ]},options:chartOpts('เทียบ'+mLabel+'รายเดือน A vs B (เรียงตามลำดับเดือนในช่วงที่เลือก)')});
+}
 async function tabPaintAnalysis(){
   const f=state.paintFilter||{};
   const active=Object.entries(f).filter(([k,v])=>v);
-  const qs=active.map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
-  const d=await api('/paint-analysis'+(qs?('?'+qs):''));
-  if(!d.count && !active.length){ setMain('<div class="section"><h2>วิเคราะห์ค่าสี</h2><div class="card"><span class="muted">ยังไม่มีข้อมูลการซื้อสี/วัตถุดิบ — อัปโหลดชีต material_purchases ผ่านแท็บนำเข้าข้อมูล (ใช้ ETL etl_dataset_to_template.py)</span></div></div>'); return; }
+  const fParts=active.map(([k,v])=>k+'='+encodeURIComponent(v));
+  const dFull=await api('/paint-analysis'+(fParts.length?('?'+fParts.join('&')):''));   // เต็มช่วง (ปุ่มปี + ตัวเปรียบเทียบ)
+  if(!dFull.count && !active.length){ setMain('<div class="section"><h2>วิเคราะห์ค่าสี</h2><div class="card"><span class="muted">ยังไม่มีข้อมูลการซื้อสี/วัตถุดิบ — อัปโหลดชีต material_purchases ผ่านแท็บนำเข้าข้อมูล (ใช้ ETL etl_dataset_to_template.py)</span></div></div>'); return; }
+  const pf=state.paintFrom, pt=state.paintTo;
+  let d=dFull;
+  if(pf&&pt){ const pp=[...fParts,'from='+pf,'to='+pt]; d=await api('/paint-analysis?'+pp.join('&')); }   // กรองช่วงวันที่เฉพาะแท็บนี้
+  const allMonthly=dFull.monthly; window.__pmonthly=allMonthly;
+  const months=allMonthly.map(x=>x.month);
+  const years=[...new Set(months.map(m=>m.slice(0,4)))];
+  const monthOpts=months.map(m=>`<option value="${m}">${m}</option>`).join('');
+  const SS='padding:7px 10px;border:1px solid #cfc9bd;border-radius:8px;background:#fff;font-family:inherit;font-size:13px';
+  const msel=(id)=>`<select id="${id}" style="${SS}">${monthOpts}</select>`;
+  const isAll=!(pf&&pt);
+  const yBtn=(lbl,from,to,on)=>`<button class="hz-btn" style="${on?'background:var(--green);color:#fff;border-color:var(--green)':''}" onclick="setPaintDate(${from?`'${from}','${to}'`:'null,null'})">${lbl}</button>`;
+  const dateBar=`<div class="card" style="margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span class="muted" style="font-size:13px"><b>📅 ช่วงข้อมูล:</b></span>
+      ${yBtn('ทั้งหมด',null,null,isAll)}
+      ${years.map(y=>yBtn('ปี '+y, y+'-01-01', y+'-12-31', pf===y+'-01-01'&&pt===y+'-12-31')).join('')}
+      ${!isAll?`<span class="pill">กำลังดู: ${pf} ถึง ${pt}</span>`:''}
+    </div>`;
   const pctOf=(s)=>d.total_satang?Math.round(s/d.total_satang*1000)/10:0;
   const DIM={vendor:'ร้านค้า',brand:'แบรนด์',item_type:'ชนิดสี'};
   const filterBar = active.length
@@ -787,6 +840,7 @@ async function tabPaintAnalysis(){
   const tbl=(rows,dim,label)=>`<div class="card" style="flex:1;min-width:280px"><h3>${label}</h3><div style="overflow:auto"><table><thead><tr><th>${label}</th><th>ยอดซื้อ</th><th>%</th><th>ครั้ง</th></tr></thead><tbody>${rows.slice(0,12).map(x=>`<tr style="cursor:pointer" title="คลิกเพื่อกรอง" onclick="setPaintFilter('${dim}',decodeURIComponent('${encodeURIComponent(x.name)}'))"><td>${x.name}</td><td>${baht(x.satang)}</td><td>${pct(pctOf(x.satang))}</td><td>${x.count}</td></tr>`).join('')}</tbody></table></div></div>`;
   setMain(`
     <div class="section"><h2>วิเคราะห์ต้นทุนสี/วัตถุดิบ ${tip('คลิกแบรนด์/ร้าน/ชนิด เพื่อกรองทั้งหน้า — กราฟและการ์ดจะเปลี่ยนตาม')}</h2>
+      ${dateBar}
       ${filterBar}
       <div class="grid cards">
         ${card(active.length?'ยอดซื้อ (กรองแล้ว)':'ยอดซื้อทั้งหมด','รวมภาษี', baht(d.total_satang), d.count+' รายการ', null)}
@@ -796,6 +850,23 @@ async function tabPaintAnalysis(){
       </div>
     </div>
     <div class="section"><h2>แนวโน้มการซื้อรายเดือน</h2><div class="chartbox"><canvas id="paintTrend"></canvas></div></div>
+    <div class="section"><h2>⚖️ เปรียบเทียบช่วงเวลา (เลือกเดือนเอง / เทียบปีต่อปี) ${tip('เลือกช่วงเดือน 2 กลุ่มมาเทียบกัน เช่น 2024-01…03 เทียบ 2025-01…03 — ความยาวช่วงไม่เท่ากันก็ได้ เช่น 2024-04…06 เทียบ 2025-04')}</h2>
+      <div class="card">
+        <div class="row" style="gap:18px;flex-wrap:wrap;align-items:flex-end">
+          <div><div class="muted" style="font-size:12px;margin-bottom:4px"><b style="color:#d4694c">● กลุ่ม A</b></div><div style="display:flex;gap:6px;align-items:center">${msel('cmpAfrom')}<span class="muted">ถึง</span>${msel('cmpAto')}</div></div>
+          <div style="font-weight:800;padding-bottom:8px;color:var(--ink)">VS</div>
+          <div><div class="muted" style="font-size:12px;margin-bottom:4px"><b style="color:#5a9d77">● กลุ่ม B</b></div><div style="display:flex;gap:6px;align-items:center">${msel('cmpBfrom')}<span class="muted">ถึง</span>${msel('cmpBto')}</div></div>
+          <button class="primary" style="padding:9px 24px" onclick="runPaintCompare()">เปรียบเทียบ ▶</button>
+        </div>
+        <div style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="muted" style="font-size:13px"><b>เทียบจาก:</b></span>
+          <button id="cmpMpaint" class="hz-btn" onclick="setPaintCmpMetric('paint')">ค่าสี</button>
+          <button id="cmpMall" class="hz-btn" onclick="setPaintCmpMetric('all')">ยอดซื้อรวม (สี+วัตถุดิบอื่น)</button>
+        </div>
+        <div id="cmpSummary" style="margin-top:16px"></div>
+        <div class="chartbox" style="margin-top:8px"><canvas id="paintCompare"></canvas></div>
+      </div>
+    </div>
     <div class="section"><h2>แยกตามร้านค้า / แบรนด์ / ชนิดสี ${tip('คลิกแถวเพื่อกรอง')}</h2>
       <div class="row">${tbl(d.by_vendor,'vendor','ร้านค้า')}${tbl(d.by_brand,'brand','แบรนด์')}</div>
       <div class="row" style="margin-top:14px">${tbl(d.by_type,'item_type','ชนิดสี')}<div class="chartbox" style="flex:1;min-width:280px"><canvas id="paintBrand"></canvas></div></div>
@@ -806,6 +877,15 @@ async function tabPaintAnalysis(){
     {label:'วัตถุดิบอื่น',data:d.monthly.map(x=>x.other/100),backgroundColor:'#9a6a43'}
   ]},options:chartOpts('ยอดซื้อรายเดือน (ค่าสี vs วัตถุดิบอื่น)')});
   mkChart('paintBrand',{type:'doughnut',data:{labels:d.by_brand.slice(0,6).map(x=>x.name),datasets:[{data:d.by_brand.slice(0,6).map(x=>x.satang/100),backgroundColor:['#5a9d77','#9a6a43','#d4694c','#c9aa63','#7cb295','#b0a48f']}]},options:{...chartOpts('สัดส่วนยอดซื้อตามแบรนด์ (คลิกเพื่อกรอง)'),onClick:(e,els,ch)=>{ if(els.length){ setPaintFilter('brand', ch.data.labels[els[0].index]); } }}});
+  // ค่าเริ่มต้นตัวเปรียบเทียบ: ปีแรก vs ปีล่าสุด (เดือนเดียวกัน สูงสุด 3 เดือนแรก)
+  if(months.length){
+    const n=months.length; let aF=months[0],aT=months[Math.min(2,n-1)],bF=months[Math.max(0,n-3)],bT=months[n-1];
+    if(years.length>=2){ const m0=months.filter(m=>m.startsWith(years[0])), m1=months.filter(m=>m.startsWith(years[years.length-1]));
+      aF=m0[0]; aT=m0[Math.min(2,m0.length-1)]; bF=m1[0]; bT=m1[Math.min(2,m1.length-1)]; }
+    const setv=(id,v)=>{const e=document.getElementById(id); if(e&&v!=null) e.value=v;};
+    setv('cmpAfrom',aF);setv('cmpAto',aT);setv('cmpBfrom',bF);setv('cmpBto',bT);
+    setPaintCmpMetric(window.__cmpMetric||'paint');   // ตั้งปุ่ม active + วาดครั้งแรก
+  }
 }
 
 // ── เฟส 4: BOM / เครื่องคำนวณราคาขาย (client-side) ──────────
