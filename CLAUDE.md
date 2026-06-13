@@ -152,6 +152,8 @@ npx wrangler deploy
   - **กันข้อมูลซ้ำ:** อัปโหลด Excel ใช้ `source` ตามชื่อไฟล์ → อัปไฟล์เดิมซ้ำ = upsert ไม่เบิ้ล; ล้างของซ้ำเดิมด้วย `clear_imported.sql` (เก็บ material_purchases)
   - **เงินเดือน:** ถ้าไม่มี payslip รายเดือน ระบบสร้างสลิปจาก `employees.base_salary` ให้ (คิด ปกส. 5% สูงสุด 750) — `from_employees:true`
   - **ETL (`etl/etl_dataset_to_template.py`):** อ่าน `dataset.csv` → กรอกชีต material_purchases **แบบละเอียดทุกแถว/ทุกคอลัมน์** + จัดหมวดอัตโนมัติ; การอัปโหลดในเว็บ **ทยอยส่งทีละ 400 แถว** (กัน Worker timeout เมื่อมีพันแถว)
+- **วันที่ใน Template (กัน format พลาด):** ทุกช่องวันที่ (order.issue/due, expenses.spent_at, cash.txn_date, material.purchase_date) หัวระบุ **"(วว/ดด/ปปปป)"** + **data validation เป็น date (ค.ศ 2020–2035)** + prompt/error เตือนถ้าผิด/ใช้ พ.ศ; ช่อง `account` หัวมีตัวอย่าง "(kbank/scb/เงินสด)" + dropdown
+- **อ่านวันที่ตอน import (`toISO()` ใน index.html):** รองรับ Date object (ใช้ UTC กัน timezone เพี้ยน 1 วัน), `dd/mm/yyyy`, `yyyy-mm-dd`, และแปลง **พ.ศ→ค.ศ อัตโนมัติ** (ปี>2200 ลบ 543); ใช้กับทุกฟิลด์ใน `DATE_KEYS`
 - **Financial Score (เต็ม 5):** เฉลี่ยจาก 6 ตัวชี้วัด — Gross Margin, Current Ratio, DIO, CCC, Runway, DSO (ฟังก์ชัน `financialScore()`); แสดงดาว + แถบย่อยรายตัว
 - **พยากรณ์กระแสเงินสด:** การ์ด 13 สัปดาห์ (มีสีสถานะ) + ระยะยาวเลือกช่วง **3/6/9/12/24/36 เดือน** (`renderLongRange()`, `/api/forecast?months=`) แบบ **Base/Best/Worst case**
 - **โครงสร้างต้นทุน:** Pie แยก วัตถุดิบ / สี / ค่าแรงทางตรง (DL) / โสหุ้ย (OH)

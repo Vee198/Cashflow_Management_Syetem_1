@@ -928,6 +928,18 @@ async function tabFinancials(){
   `);
 }
 
+// อ่านวันที่ให้เป็น YYYY-MM-DD เสมอ — รองรับ Date object (กัน timezone เพี้ยน), dd/mm/yyyy, yyyy-mm-dd, และเผื่อ พ.ศ→ค.ศ
+const DATE_KEYS=['issue_date','due_date','spent_at','txn_date','purchase_date','start_date','paid_date','moved_at','incurred_at','completed_at','delivered_date','promised_date','last_counted_at'];
+function toISO(v){
+  if(v==null||v==='') return v;
+  if(v instanceof Date) return v.getUTCFullYear()+'-'+String(v.getUTCMonth()+1).padStart(2,'0')+'-'+String(v.getUTCDate()).padStart(2,'0');
+  const s=String(v).trim();
+  let m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);   // dd/mm/yyyy
+  if(m){ let y=+m[3]; if(y>2200) y-=543; return y+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'); }
+  m=s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);        // yyyy-mm-dd
+  if(m) return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+  return s;
+}
 async function importExcel(file){
   const msg=document.getElementById('xlsxMsg'); msg.textContent='กำลังอ่านไฟล์…';
   try{
@@ -940,7 +952,7 @@ async function importExcel(file){
       const aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,blankrows:false,defval:null});
       if(aoa.length<3) continue;               // แถว1=ไทย, แถว2=field, แถว3+=ข้อมูล
       const keys=aoa[1];
-      const rows=aoa.slice(2).map(arr=>{const o={};keys.forEach((k,i)=>{if(k!=null&&String(k).trim()!==''){let v=arr[i]; if(v instanceof Date) v=v.toISOString().slice(0,10); o[String(k).trim()]=v;}});return o;})
+      const rows=aoa.slice(2).map(arr=>{const o={};keys.forEach((k,i)=>{if(k!=null&&String(k).trim()!==''){let v=arr[i]; const kk=String(k).trim(); if(v instanceof Date||DATE_KEYS.includes(kk)) v=toISO(v); o[kk]=v;}});return o;})
         .filter(o=>o.external_id!=null&&String(o.external_id).trim()!=='');
       if(!rows.length) continue;
       total.sheets++;
