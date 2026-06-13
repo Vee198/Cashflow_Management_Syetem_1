@@ -7,6 +7,58 @@
 
 const baht = (v) => Math.round((Number(v) || 0) * 100); // บาท → สตางค์
 
+// ============================================================
+// FAST PATH — entity ที่ไม่มี FK ภายใน (ไม่ต้อง lookup id) → batch ได้ทั้งก้อน
+// ใช้ INSERT … ON CONFLICT(source,external_id) DO UPDATE (ไม่ต้อง SELECT ก่อน)
+// แล้วรวมหลาย statement ด้วย db.batch() → 1 subrequest ต่อก้อน
+// กัน Worker ล้มเพราะ subrequest เกินลิมิต (เคสค่าสีหลักพันแถว)
+// ============================================================
+const SIMPLE_SPECS = {
+  customers: { table: 'customers', cols: ['name', 'phone', 'credit_terms_days'],
+    vals: (r) => ({ name: r.name, phone: r.phone ?? null, credit_terms_days: r.credit_terms_days ?? 30 }) },
+  suppliers: { table: 'suppliers', cols: ['name', 'category'],
+    vals: (r) => ({ name: r.name, category: r.category ?? null }) },
+  expenses: { table: 'expenses', cols: ['category', 'amount_satang', 'spent_at', 'note'],
+    vals: (r) => ({ category: r.category, amount_satang: baht(r.amount), spent_at: r.spent_at, note: r.note ?? null }) },
+  material_purchases: { table: 'material_purchases',
+    cols: ['purchase_date', 'vendor', 'inv_no', 'brand', 'item_type', 'base', 'color_code', 'qty', 'unit',
+           'unit_price_satang', 'total_incl_vat_satang', 'total_excl_vat_satang', 'vat_satang', 'category'],
+    vals: (r) => ({
+      purchase_date: r.purchase_date ?? null, vendor: r.vendor ?? null, inv_no: r.inv_no ?? null,
+      brand: r.brand ?? null, item_type: r.item_type ?? null, base: r.base ?? null, color_code: r.color_code ?? null,
+      qty: r.qty ?? 0, unit: r.unit ?? null,
+      unit_price_satang: baht(r.unit_price), total_incl_vat_satang: baht(r.total_incl_vat),
+      total_excl_vat_satang: baht(r.total_excl_vat), vat_satang: baht(r.vat), category: r.category ?? 'paint',
+    }) },
+  cash_transactions: { table: 'cash_transactions', cols: ['account', 'direction', 'amount_satang', 'txn_date', 'category', 'ref'],
+    vals: (r) => ({ account: r.account, direction: r.direction, amount_satang: baht(r.amount),
+      txn_date: r.txn_date, category: r.category ?? null, ref: r.ref ?? null }) },
+  budgets: { table: 'budgets', cols: ['period', 'category', 'budget_type', 'amount_satang'],
+    vals: (r) => ({ period: r.period, category: r.category, budget_type: r.budget_type, amount_satang: baht(r.amount) }) },
+  employees: { table: 'employees',
+    cols: ['name', 'emp_type', 'department', 'base_salary_satang', 'hourly_rate_satang', 'ot_rate_satang', 'sso_enrolled', 'start_date', 'status'],
+    vals: (r) => ({ name: r.name, emp_type: r.emp_type ?? 'full_time', department: r.department ?? null,
+      base_salary_satang: baht(r.base_salary), hourly_rate_satang: baht(r.hourly_rate), ot_rate_satang: baht(r.ot_rate),
+      sso_enrolled: (r.sso_enrolled === 0 || r.sso_enrolled === '0') ? 0 : 1, start_date: r.start_date ?? null, status: r.status ?? 'active' }) },
+  inventory_items: { table: 'inventory_items',
+    cols: ['name', 'category', 'unit', 'unit_cost_satang', 'qty_on_hand', 'reorder_point', 'safety_stock', 'lead_time_days', 'bin_location', 'abc_class', 'last_counted_at'],
+    vals: (r) => ({ name: r.name, category: r.category, unit: r.unit ?? null,
+      unit_cost_satang: baht(r.unit_cost), qty_on_hand: r.qty_on_hand ?? 0, reorder_point: r.reorder_point ?? 0,
+      safety_stock: r.safety_stock ?? 0, lead_time_days: r.lead_time_days ?? 0,
+      bin_location: r.bin_location ?? null, abc_class: r.abc_class ?? null, last_counted_at: r.last_counted_at ?? null }) },
+};
+
+// คืน prepared statement สำหรับ upsert แบบ ON CONFLICT (ไม่ execute ทันที → เอาไป batch ได้)
+function upsertStmt(db, table, cols, source, externalId, values) {
+  const allCols = ['source', 'external_id', ...cols];
+  const ph = allCols.map(() => '?').join(', ');
+  const setSql = cols.map((c) => `${c} = excluded.${c}`).join(', ');
+  return db.prepare(
+    `INSERT INTO ${table} (${allCols.join(', ')}) VALUES (${ph}) ` +
+    `ON CONFLICT(source, external_id) DO UPDATE SET ${setSql}`
+  ).bind(source, externalId, ...cols.map((c) => values[c]));
+}
+
 // map entity → ฟังก์ชัน upsert ทีละแถว (คืน 'inserted' | 'updated')
 const HANDLERS = {
   customers: async (db, r, source) =>
@@ -268,9 +320,11 @@ function splitCSVLine(line) {
   return out;
 }
 
-// จุดเข้าหลัก: รับ batch → ประมวลทีละแถว → คืนสรุป
+// จุดเข้าหลัก: รับ batch → ประมวล → คืนสรุป
+// entity แบบ simple (SIMPLE_SPECS) ใช้ db.batch() ลด subrequest; entity ที่มี FK ทำทีละแถว
 export async function runImport(db, { source, entity, rows }) {
-  if (!HANDLERS[entity]) throw new Error(`ไม่รู้จัก entity: ${entity}`);
+  const spec = SIMPLE_SPECS[entity];
+  if (!HANDLERS[entity] && !spec) throw new Error(`ไม่รู้จัก entity: ${entity}`);
   const batch = await db.prepare(
     `INSERT INTO import_batches (source, entity, row_count) VALUES (?, ?, ?)`
   ).bind(source, entity, rows.length).run();
@@ -278,21 +332,70 @@ export async function runImport(db, { source, entity, rows }) {
 
   let inserted = 0, updated = 0, skipped = 0;
   const errors = [];
-  for (const r of rows) {
-    try {
-      const result = await HANDLERS[entity](db, r, source);
-      if (result === 'inserted') inserted++; else updated++;
-      await db.prepare(
-        `INSERT INTO import_rows (batch_id, entity, external_id, payload_json, status) VALUES (?, ?, ?, ?, 'ok')`
-      ).bind(batchId, entity, r.external_id ?? null, JSON.stringify(r)).run();
-    } catch (e) {
-      skipped++;
-      errors.push({ external_id: r.external_id, error: String(e.message || e) });
-      await db.prepare(
-        `INSERT INTO import_rows (batch_id, entity, external_id, payload_json, status, error) VALUES (?, ?, ?, ?, 'error', ?)`
-      ).bind(batchId, entity, r.external_id ?? null, JSON.stringify(r), String(e.message || e)).run();
+
+  if (spec) {
+    // ── FAST PATH: batch ทีละก้อน (กัน subrequest เกินลิมิตเมื่อมีหลายพันแถว) ──
+    const valid = rows.filter((r) => r.external_id != null && String(r.external_id).trim() !== '');
+    skipped += rows.length - valid.length;
+
+    // นับของเดิม เพื่อแยก inserted/updated (อัปไฟล์เดิมซ้ำ = updated ไม่เบิ้ล)
+    let existing = 0;
+    const ids = valid.map((r) => String(r.external_id).trim());
+    for (let i = 0; i < ids.length; i += 90) {
+      const part = ids.slice(i, i + 90);
+      const ph = part.map(() => '?').join(',');
+      const row = await db.prepare(
+        `SELECT COUNT(*) AS n FROM ${spec.table} WHERE source = ? AND external_id IN (${ph})`
+      ).bind(source, ...part).first();
+      existing += row?.n || 0;
+    }
+
+    // เตรียม 2 statement ต่อแถว: upsert + log แล้วยิงเป็นก้อน
+    const units = valid.map((r) => {
+      const ext = String(r.external_id).trim();
+      return { ext, stmts: [
+        upsertStmt(db, spec.table, spec.cols, source, ext, spec.vals(r)),
+        db.prepare(`INSERT INTO import_rows (batch_id, entity, external_id, payload_json, status) VALUES (?, ?, ?, ?, 'ok')`)
+          .bind(batchId, entity, ext, JSON.stringify(r)),
+      ] };
+    });
+
+    let okCount = 0;
+    const ROWS_PER_BATCH = 40; // 40 แถว × 2 stmt = 80 statements/batch
+    for (let i = 0; i < units.length; i += ROWS_PER_BATCH) {
+      const grp = units.slice(i, i + ROWS_PER_BATCH);
+      try {
+        await db.batch(grp.flatMap((u) => u.stmts));
+        okCount += grp.length;
+      } catch (e) {
+        // ถ้าก้อนล้ม ลองทีละแถวเพื่อกันแถวเสียพังทั้งก้อน
+        for (const u of grp) {
+          try { await db.batch(u.stmts); okCount++; }
+          catch (e2) { skipped++; errors.push({ external_id: u.ext, error: String(e2.message || e2) }); }
+        }
+      }
+    }
+    updated = Math.min(existing, okCount);
+    inserted = okCount - updated;
+  } else {
+    // ── DEPENDENT PATH: entity ที่มี FK ภายใน (order/jobs/invoices/…) ทำทีละแถวตามลำดับ ──
+    for (const r of rows) {
+      try {
+        const result = await HANDLERS[entity](db, r, source);
+        if (result === 'updated') updated++; else inserted++;
+        await db.prepare(
+          `INSERT INTO import_rows (batch_id, entity, external_id, payload_json, status) VALUES (?, ?, ?, ?, 'ok')`
+        ).bind(batchId, entity, r.external_id ?? null, JSON.stringify(r)).run();
+      } catch (e) {
+        skipped++;
+        errors.push({ external_id: r.external_id, error: String(e.message || e) });
+        await db.prepare(
+          `INSERT INTO import_rows (batch_id, entity, external_id, payload_json, status, error) VALUES (?, ?, ?, ?, 'error', ?)`
+        ).bind(batchId, entity, r.external_id ?? null, JSON.stringify(r), String(e.message || e)).run();
+      }
     }
   }
+
   await db.prepare(
     `UPDATE import_batches SET inserted = ?, updated = ?, skipped = ? WHERE id = ?`
   ).bind(inserted, updated, skipped, batchId).run();
