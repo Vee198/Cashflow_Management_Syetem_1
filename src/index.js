@@ -211,7 +211,7 @@ app.get('/api/dashboard', async (c) => {
       runway: A.burnAndRunway(cashTxns, asOf, 3),
       expense_buckets: { buckets, by_category: eb.by_category, total_satang: prodCost + overheadExp },
       ar_by_customer: A.arByCustomer(invF, customers, asOf),
-      ar_aging: A.arAgingByIssue(invF, asOf),
+      ar_aging: A.arAging(invF, asOf),   // อิง "เลยกำหนด" (overdue จาก due_date) ให้สอดคล้องกับตาราง
       ap_summary: A.apFromExpenses(expF, asOf),
       dpo_days: A.apFromExpenses(expF, asOf).dpo_days,
       fixed_variable: A.fixedVariable(expF),
@@ -245,6 +245,18 @@ app.get('/api/paint-analysis', async (c) => {
     if (from) rows = rows.filter((p) => (p.purchase_date || '') >= from);
     if (to) rows = rows.filter((p) => (p.purchase_date || '') <= to);
     return ok(c, A.materialPurchaseAnalysis(rows));
+  } catch (e) { return err(c, e, 500); }
+});
+
+// ---------- งบกำไรขาดทุนรายเดือน (P&L) ----------
+app.get('/api/pnl', async (c) => {
+  try {
+    const [jobs, expenses] = await Promise.all([repo.getJobs(c.env.DB), repo.getExpenses(c.env.DB)]);
+    return ok(c, {
+      monthly: A.pnlMonthly(jobs, expenses),
+      cogs_cats: ['paint', 'wood', 'hardware', 'labor', 'salary'],
+      oh_cats: ['rent', 'utility', 'marketing', 'ads', 'transport', 'overhead', 'other'],
+    });
   } catch (e) { return err(c, e, 500); }
 });
 

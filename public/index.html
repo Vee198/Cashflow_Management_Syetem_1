@@ -42,6 +42,7 @@
   *{box-sizing:border-box}
   body{margin:0;font-family:var(--font);background:var(--bg);background-image:var(--bg-grad);background-attachment:fixed;color:var(--text);font-size:15px}
   #topbar{position:sticky;top:0;z-index:30}
+  @media print{ #topbar{display:none!important} body{background:#fff} .section{break-inside:avoid} button{display:none!important} }
   header{background:linear-gradient(135deg,#5a9d77 0%,#74ad8d 55%,#83b89c 100%);border-bottom:3px solid var(--gold);padding:14px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;box-shadow:0 3px 16px rgba(90,157,119,.25);color:#ffffff}
   header h1{font-size:20px;margin:0;font-weight:700;color:#fff;letter-spacing:.3px;text-shadow:0 1px 2px rgba(40,70,50,.18)}
   header .sub{color:#eef7ef;font-size:12.5px;letter-spacing:.2px}
@@ -182,6 +183,7 @@ const TABS = [
   {id:'cash', label:'เงินสด & สภาพคล่อง', adv:false},
   {id:'aging', label:'อายุหนี้ (AR/AP)', adv:false},
   {id:'cost', label:'ต้นทุน & ค่าสี', adv:false},
+  {id:'pnl', label:'📊 งบกำไรขาดทุน', adv:false},
   {id:'paint', label:'วิเคราะห์ค่าสี', adv:false},
   {id:'bom', label:'BOM / ตั้งราคา', adv:false},
   {id:'production', label:'การผลิต', adv:false},
@@ -229,6 +231,7 @@ async function route(){
     if(state.tab==='cash') return await tabCash();
     if(state.tab==='aging') return await tabAging();
     if(state.tab==='cost') return await tabCost();
+    if(state.tab==='pnl') return await tabPnL();
     if(state.tab==='paint') return await tabPaintAnalysis();
     if(state.tab==='bom') return tabBOM();
     if(state.tab==='production') return await tabProduction();
@@ -420,11 +423,11 @@ async function tabOverview(){
 
     <div class="section"><h2>ยอดค้างรับรายลูกค้า ${tip('วันที่รับงาน = ออเดอร์เก่าสุดที่ยังค้าง · จำนวนวันค้าง = วันนี้ − วันที่รับงาน · เลยกำหนด (แดง) = เลยวันครบกำหนดชำระแล้ว')}</h2>
       <div class="card"><div style="overflow:auto"><table><thead><tr><th>ลูกค้า</th><th>เบอร์โทร</th><th>วันที่รับงาน</th><th>จำนวนวันค้าง</th><th>ยอดค้างรับ</th><th>เลยกำหนด</th></tr></thead><tbody>
-      ${dash.ar_by_customer.length?dash.ar_by_customer.map(x=>{const dcol=x.days_outstanding==null?'':(x.days_outstanding>60?'color:var(--red);font-weight:600':x.days_outstanding>30?'color:var(--gold);font-weight:600':'');return `<tr><td>${x.customer}</td><td>${x.phone||'-'}</td><td>${x.first_issue_date||'-'}</td><td style="${dcol}">${x.days_outstanding!=null?x.days_outstanding+' วัน':'-'}</td><td>${baht(x.outstanding_satang)}</td><td style="${x.overdue_satang>0?'color:var(--red);font-weight:600':''}">${x.overdue_satang>0?baht(x.overdue_satang):'-'}</td></tr>`}).join(''):'<tr><td colspan=6 class="muted">ไม่มียอดค้างรับ 🎉</td></tr>'}
+      ${dash.ar_by_customer.length?dash.ar_by_customer.map(x=>{const isOver=x.overdue_satang>0; const dcol=!isOver?'':(x.days_outstanding>60?'color:var(--red);font-weight:600':x.days_outstanding>30?'color:var(--gold);font-weight:600':'');return `<tr><td>${x.customer}</td><td>${x.phone||'-'}</td><td>${x.first_issue_date||'-'}</td><td style="${dcol}">${isOver&&x.days_outstanding!=null?x.days_outstanding+' วัน':'<span class="muted">— ยังไม่ถึงกำหนด</span>'}</td><td>${baht(x.outstanding_satang)}</td><td style="${isOver?'color:var(--red);font-weight:600':''}">${isOver?baht(x.overdue_satang):'-'}</td></tr>`}).join(''):'<tr><td colspan=6 class="muted">ไม่มียอดค้างรับ 🎉</td></tr>'}
       </tbody></table></div></div>
     </div>
 
-    <div class="section"><h2>AR Aging — อายุยอดค้างรับ ${tip('แยกยอดค้างรับตามอายุ (นับจากวันที่รับงาน) ยิ่งอายุมาก ยิ่งเสี่ยงเก็บไม่ได้ — ควรเร่งตามช่วง 90 วัน+')}</h2>
+    <div class="section"><h2>AR Aging — อายุหนี้ที่เลยกำหนดแล้ว ${tip('เฉพาะยอดที่ "เลยกำหนดชำระ" (overdue) แยกตามจำนวนวันที่เลยมา — ยอดที่ยังไม่ถึงกำหนดไม่นับ (ยังไม่ถือว่าค้าง) ให้สอดคล้องกับตารางด้านบน')}</h2>
       <div class="card"><div class="chartbox" style="box-shadow:none;border:none;padding:0"><canvas id="arAgingChart"></canvas></div></div>
     </div>
 
@@ -482,10 +485,10 @@ async function tabOverview(){
       </tbody></table></div>
     </div>
   `);
-  const ara=dash.ar_aging||{d0_30:0,d31_60:0,d61_90:0,d90p:0};
-  mkChart('arAgingChart',{type:'bar',data:{labels:['0-30 วัน','31-60 วัน','61-90 วัน','90 วัน+'],datasets:[
-    {label:'ยอดค้างรับ',data:[ara.d0_30,ara.d31_60,ara.d61_90,ara.d90p].map(v=>v/100),backgroundColor:['#5a9d77','#c9aa63','#d98a4c','#d4694c']}
-  ]},options:chartOpts('มูลค่ายอดค้างรับแยกตามอายุหนี้ (บาท)')});
+  const ara=dash.ar_aging||{d1_30:0,d31_60:0,d61_90:0,d90_plus:0};
+  mkChart('arAgingChart',{type:'bar',data:{labels:['เลยกำหนด 1-30 วัน','31-60 วัน','61-90 วัน','90 วัน+'],datasets:[
+    {label:'ยอดที่เลยกำหนดแล้ว',data:[ara.d1_30,ara.d31_60,ara.d61_90,ara.d90_plus].map(v=>v/100),backgroundColor:['#c9aa63','#d98a4c','#d4694c','#b00020']}
+  ]},options:chartOpts('มูลค่ายอดค้างรับ "ที่เลยกำหนดแล้ว" แยกตามอายุหนี้ (บาท)')});
   const apa=(dash.ap_summary&&dash.ap_summary.aging)||{d0_30:0,d31_60:0,d61_90:0,d90p:0};
   mkChart('apAgingChart',{type:'bar',data:{labels:['ครบใน 0-30 วัน','31-60 วัน','61-90 วัน','90 วัน+'],datasets:[
     {label:'ยอดค้างจ่าย (AP)',data:[apa.d0_30,apa.d31_60,apa.d61_90,apa.d90p].map(v=>v/100),backgroundColor:['#d4694c','#d98a4c','#c9aa63','#9a6a43']}
@@ -561,6 +564,98 @@ async function tabAging(){
   mkChart('agAP',{type:'doughnut',data:{labels,datasets:[{data:vals(ap),backgroundColor:cols}]},options:chartOpts('เจ้าหนี้แยกช่วงอายุ')});
 }
 
+// ── งบกำไรขาดทุน (P&L) — เลือก 2 งวด (multi-เดือน) + vertical/horizontal + พิมพ์/CSV ──
+const PNL_CATLBL={paint:'ค่าสี',wood:'ค่าไม้',hardware:'ฮาร์ดแวร์/วัตถุดิบ',labor:'ค่าแรงผลิต',salary:'เงินเดือน',rent:'ค่าเช่า',utility:'ค่าน้ำ-ไฟ',marketing:'การตลาด',ads:'โฆษณา (Ads)',transport:'ค่าขนส่ง',overhead:'โสหุ้ย',other:'อื่นๆ'};
+const PNL_COGS=['paint','wood','hardware','labor','salary'];
+const PNL_OH=['rent','utility','marketing','ads','transport','overhead','other'];
+function pnlRangeAgg(monthly,from,to){
+  const r={revenue:0,cats:{}};
+  for(const m of monthly){ if(m.month>=from&&m.month<=to){ r.revenue+=m.revenue; for(const k in m.cats) r.cats[k]=(r.cats[k]||0)+m.cats[k]; } }
+  r.cogs=PNL_COGS.reduce((s,k)=>s+(r.cats[k]||0),0);
+  r.oh=PNL_OH.reduce((s,k)=>s+(r.cats[k]||0),0);
+  r.gross=r.revenue-r.cogs; r.net=r.gross-r.oh;
+  return r;
+}
+async function tabPnL(){
+  const d=await api('/pnl'); const monthly=d.monthly||[];
+  if(!monthly.length){ setMain('<div class="section"><h2>งบกำไรขาดทุน</h2><div class="card"><span class="muted">ยังไม่มีข้อมูล — อัปโหลดออเดอร์ + รายจ่ายก่อน (รายได้จากชีต order, ต้นทุน/ค่าใช้จ่ายจากชีต expenses)</span></div></div>'); return; }
+  window.__pnl=monthly;
+  const months=monthly.map(x=>x.month);
+  const SS='padding:7px 10px;border:1px solid #cfc9bd;border-radius:8px;background:#fff;font-family:inherit;font-size:13px';
+  const ms=id=>`<select id="${id}" style="${SS}">${months.map(m=>`<option value="${m}">${m}</option>`).join('')}</select>`;
+  setMain(`
+    <div class="section"><h2>📊 งบกำไรขาดทุน (Income Statement) ${tip('เลือกช่วงเดือน 2 งวดมาเทียบ — รวมหลายเดือน = ไตรมาส · Vertical = % ของยอดขาย · Horizontal = % เปลี่ยนแปลง งวด B เทียบ A')}</h2>
+      <div class="card">
+        <div class="row" style="gap:18px;flex-wrap:wrap;align-items:flex-end">
+          <div><div class="muted" style="font-size:12px;margin-bottom:4px"><b style="color:#5a9d77">● งวด A</b></div><div style="display:flex;gap:6px;align-items:center">${ms('plAfrom')}<span class="muted">ถึง</span>${ms('plAto')}</div></div>
+          <div style="font-weight:800;padding-bottom:8px">VS</div>
+          <div><div class="muted" style="font-size:12px;margin-bottom:4px"><b style="color:#9a6a43">● งวด B</b></div><div style="display:flex;gap:6px;align-items:center">${ms('plBfrom')}<span class="muted">ถึง</span>${ms('plBto')}</div></div>
+          <button class="primary" style="padding:9px 22px" onclick="runPnL()">แสดงงบ ▶</button>
+          <button class="hz-btn" onclick="window.print()">🖨 พิมพ์</button>
+          <button class="hz-btn" onclick="exportPnLCSV()">⬇ ส่งออก CSV</button>
+        </div>
+        <div id="pnlTable" style="margin-top:16px;overflow:auto"></div>
+      </div>
+    </div>
+  `);
+  const n=months.length, setv=(id,v)=>{const e=document.getElementById(id); if(e&&v) e.value=v;};
+  setv('plAfrom',months[0]); setv('plAto',months[Math.min(2,n-1)]);
+  setv('plBfrom',months[Math.max(0,n-3)]); setv('plBto',months[n-1]);
+  runPnL();
+}
+function runPnL(){
+  const monthly=window.__pnl||[];
+  const gv=id=>{const e=document.getElementById(id);return e?e.value:'';};
+  let a0=gv('plAfrom'),a1=gv('plAto'); if(a0>a1){const t=a0;a0=a1;a1=t;}
+  let b0=gv('plBfrom'),b1=gv('plBto'); if(b0>b1){const t=b0;b0=b1;b1=t;}
+  const A=pnlRangeAgg(monthly,a0,a1), B=pnlRangeAgg(monthly,b0,b1);
+  window.__pnlAB={A,B,labA:a0+'…'+a1,labB:b0+'…'+b1};
+  const vp=(val,rev)=>rev?(val/rev*100):0;
+  const hp=(a,b)=>a?((b-a)/Math.abs(a)*100):(b?100:0);
+  const row=(label,aVal,bVal,opt={})=>{
+    const indent=opt.sub?'padding-left:24px':''; const bold=opt.bold?'font-weight:700':''; const bg=opt.head?'background:rgba(154,106,67,.08)':'';
+    const h=hp(aVal,bVal); const good=opt.cost?(h<0):(h>0); const hc=h===0?'var(--muted)':(good?'var(--green)':'var(--red)');
+    return `<tr style="${bold};${bg}"><td style="${indent}">${label}</td>
+      <td style="text-align:right">${baht(aVal)}</td><td style="text-align:right;color:var(--muted);font-size:12px">${vp(aVal,A.revenue).toFixed(1)}%</td>
+      <td style="text-align:right">${baht(bVal)}</td><td style="text-align:right;color:var(--muted);font-size:12px">${vp(bVal,B.revenue).toFixed(1)}%</td>
+      <td style="text-align:right;color:${hc};font-weight:600">${h>0?'+':''}${h.toFixed(1)}%</td></tr>`;
+  };
+  const catRow=k=>row(PNL_CATLBL[k]||k, A.cats[k]||0, B.cats[k]||0, {sub:true,cost:true});
+  const cogsCats=PNL_COGS.filter(k=>(A.cats[k]||B.cats[k]));
+  const ohCats=PNL_OH.filter(k=>(A.cats[k]||B.cats[k]));
+  document.getElementById('pnlTable').innerHTML=`
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="border-bottom:2px solid var(--line)"><th style="text-align:left">รายการ</th>
+        <th colspan=2 style="text-align:center;color:#5a9d77">งวด A (${a0}…${a1})</th>
+        <th colspan=2 style="text-align:center;color:#9a6a43">งวด B (${b0}…${b1})</th>
+        <th style="text-align:right">เปลี่ยนแปลง</th></tr>
+        <tr style="font-size:11px;color:var(--muted)"><th></th><th style="text-align:right">บาท</th><th style="text-align:right">%ขาย</th><th style="text-align:right">บาท</th><th style="text-align:right">%ขาย</th><th></th></tr></thead>
+      <tbody>
+        ${row('รายได้รวม (Revenue)',A.revenue,B.revenue,{bold:true})}
+        ${row('ต้นทุนขาย (COGS)',A.cogs,B.cogs,{head:true,bold:true,cost:true})}
+        ${cogsCats.map(catRow).join('')}
+        ${row('กำไรขั้นต้น (Gross Profit)',A.gross,B.gross,{bold:true})}
+        ${row('ค่าใช้จ่ายดำเนินงาน (OH)',A.oh,B.oh,{head:true,bold:true,cost:true})}
+        ${ohCats.map(catRow).join('')}
+        ${row('กำไรสุทธิ (Net Profit)',A.net,B.net,{bold:true})}
+      </tbody>
+    </table>
+    <div class="muted" style="font-size:12px;margin-top:10px">Vertical = % ของยอดขายในงวดนั้น · เปลี่ยนแปลง (Horizontal) = % เพิ่ม/ลดของงวด B เทียบงวด A — รายได้/กำไรเพิ่ม=เขียว, ต้นทุน/ค่าใช้จ่ายเพิ่ม=แดง</div>`;
+}
+function exportPnLCSV(){
+  const ab=window.__pnlAB; if(!ab) return; const {A,B,labA,labB}=ab;
+  const v=(val,rev)=>rev?(val/rev*100).toFixed(1):'0'; const h=(a,b)=>a?(((b-a)/Math.abs(a))*100).toFixed(1):'0'; const b2=s=>(s/100).toFixed(2);
+  const rows=[['รายการ','งวดA('+labA+')','%ขายA','งวดB('+labB+')','%ขายB','เปลี่ยนแปลง%']];
+  const push=(label,a,b)=>rows.push([label,b2(a),v(a,A.revenue),b2(b),v(b,B.revenue),h(a,b)]);
+  push('รายได้รวม',A.revenue,B.revenue); push('ต้นทุนขาย (COGS)',A.cogs,B.cogs);
+  PNL_COGS.forEach(k=>{if(A.cats[k]||B.cats[k])push('  '+(PNL_CATLBL[k]||k),A.cats[k]||0,B.cats[k]||0);});
+  push('กำไรขั้นต้น',A.gross,B.gross); push('ค่าใช้จ่ายดำเนินงาน (OH)',A.oh,B.oh);
+  PNL_OH.forEach(k=>{if(A.cats[k]||B.cats[k])push('  '+(PNL_CATLBL[k]||k),A.cats[k]||0,B.cats[k]||0);});
+  push('กำไรสุทธิ',A.net,B.net);
+  const csv='﻿'+rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  const a=document.createElement('a'); a.href=url; a.download='income_statement.csv'; a.click(); URL.revokeObjectURL(url);
+}
 async function tabCost(){
   const d = await api('/cost');
   const cg=d.gross_margin, p=d.paint, c=d.cogs;

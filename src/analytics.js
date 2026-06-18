@@ -644,6 +644,16 @@ export function jobCostBreakdown(jobs) {
     total_satang: total, doors, revenue_satang: revenue, breakdown };
 }
 
+// งบกำไรขาดทุนรายเดือน (สำหรับแท็บ P&L) — รายได้จาก jobs(quoted, ตาม started_at), ต้นทุน/ค่าใช้จ่ายจาก expenses(ตาม spent_at)
+// คืน category ดิบรายเดือน ให้ frontend รวมช่วง + แยก COGS/OH + คำนวณ vertical/horizontal เอง
+export function pnlMonthly(jobs, expenses) {
+  const m = {};
+  const ens = (k) => { if (!m[k]) m[k] = { revenue: 0, cats: {} }; return m[k]; };
+  for (const j of jobs) { const k = ym(j.started_at); if (k) ens(k).revenue += j.quoted_price_satang || 0; }
+  for (const e of expenses) { const k = ym(e.spent_at); if (!k) continue; const o = ens(k); o.cats[e.category] = (o.cats[e.category] || 0) + (e.amount_satang || 0); }
+  return Object.keys(m).sort().map((k) => ({ month: k, revenue: m[k].revenue, cats: m[k].cats }));
+}
+
 // แยกค่าใช้จ่ายคงที่ (fixed) vs ผันแปร (variable) — ตามคอลัมน์ expense_kind
 export function fixedVariable(expenses) {
   let fixed = 0, variable = 0, unset = 0;
