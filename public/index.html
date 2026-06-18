@@ -1092,6 +1092,11 @@ function tabImport(){
         <a href="/WAYTHAI-FORYOU_Template.xlsx" download><button class="primary" type="button">⬇ ดาวน์โหลด Excel Template</button></a>
         &nbsp;&nbsp; <input type="file" id="xlsxFile" accept=".xlsx" /> <button class="primary" id="xlsxUpload" type="button">อัปโหลดไฟล์ที่กรอกแล้ว</button>
         <div id="xlsxMsg" class="muted" style="margin-top:10px;font-size:13px"></div>
+        <div class="card card-green" style="margin-top:12px;font-size:13px;line-height:1.7">
+          <b>✏️ แก้ข้อมูลภายหลัง (ไม่ต้องสร้างไฟล์ใหม่):</b> เปิดไฟล์ Template <b>เดิม</b> → แก้เฉพาะช่องที่ต้องการ → บันทึก (ชื่อไฟล์เดิม) → กดปุ่ม <b>"อัปโหลดไฟล์ที่กรอกแล้ว"</b> ซ้ำ
+          <br>ระบบจะ <b>อัปเดตเฉพาะแถวที่แก้</b> (เทียบด้วยรหัส external_id) — แถวอื่นไม่กระทบ และ <b>ไม่เพิ่มแถวซ้ำ</b> ⇒ การอัปโหลดไฟล์เดิมซ้ำ ทำหน้าที่เหมือนปุ่ม "Update/Refresh" ในตัว
+          <br><span class="muted">⚠ ห้ามแทรก/เรียง/ลบแถวเก่า (รหัสจะเลื่อน) — แก้ค่าในแถวเดิมได้ตามปกติ</span>
+        </div>
       </div>
       <div class="card" style="margin-top:14px">
         <h3>② กรอกทีละรายการ (ด่วน)</h3>
