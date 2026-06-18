@@ -205,10 +205,12 @@ CREATE TABLE IF NOT EXISTS expenses (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   source        TEXT,
   external_id   TEXT,
-  category      TEXT NOT NULL,        -- salary|rent|utility|transport|paint|marketing|other
+  category      TEXT NOT NULL,        -- salary|rent|utility|transport|paint|wood|hardware|labor|marketing|ads|other
   amount_satang INTEGER NOT NULL DEFAULT 0,
-  spent_at      TEXT NOT NULL,
+  spent_at      TEXT NOT NULL,        -- วันที่ซื้อ/จ่าย
   note          TEXT,
+  credit_term_days INTEGER DEFAULT 0, -- เครดิตเทอม (วัน) — 0 = จ่ายเงินสดทันที, >0 = ซื้อเชื่อ (AP)
+  expense_kind  TEXT,                 -- fixed = ค่าใช้จ่ายคงที่ | variable = ผันแปร
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(source, external_id)
 );

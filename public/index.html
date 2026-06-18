@@ -419,6 +419,25 @@ async function tabOverview(){
       <div class="card"><div class="chartbox" style="box-shadow:none;border:none;padding:0"><canvas id="arAgingChart"></canvas></div></div>
     </div>
 
+    <div class="section"><h2>AP — เจ้าหนี้การค้า / ซื้อเชื่อ ${tip('ยอดที่ต้องจ่ายซัพในอนาคต จากค่าใช้จ่ายที่ตั้งเครดิตเทอม (credit_term>0 ในชีต expenses; =0 คือจ่ายเงินสด) · DPO = เครดิตเทอมเฉลี่ย ยิ่งนานยิ่งเก็บเงินสดไว้ได้นาน')}</h2>
+      <div class="grid cards">
+        ${card('ยอดค้างจ่าย (AP)','ซื้อเชื่อที่ยังไม่ถึงกำหนด', baht(dash.ap_summary.ap_outstanding_satang), 'ซื้อเชื่อรวม '+baht(dash.ap_summary.credit_total_satang), dash.ap_summary.ap_outstanding_satang>0?'yellow':'green')}
+        ${card('DPO (ระยะจ่ายหนี้)','เครดิตเทอมเฉลี่ยถ่วงน้ำหนัก', dash.dpo_days+' วัน', 'คู่กับ DSO → วงจรเงินสด', 'green')}
+      </div>
+      <div class="card" style="margin-top:12px"><div class="chartbox" style="box-shadow:none;border:none;padding:0"><canvas id="apAgingChart"></canvas></div></div>
+    </div>
+
+    <div class="section"><h2>ค่าใช้จ่ายคงที่ vs ผันแปร ${tip('คงที่ (fixed) = จ่ายเท่าเดิมทุกเดือนไม่ว่าขายได้แค่ไหน เช่น เช่า/เงินเดือน · ผันแปร (variable) = ขึ้นลงตามงาน เช่น วัสดุ — ระบุในคอลัมน์ expense_kind ชีต expenses')}</h2>
+      <div class="row">
+        <div class="chartbox" style="flex:1;min-width:280px"><canvas id="fixedVarChart"></canvas></div>
+        <div class="card" style="flex:1;min-width:280px"><table><thead><tr><th>ประเภท</th><th>ยอดรวม</th></tr></thead><tbody>
+          <tr><td>🔒 คงที่ (fixed)</td><td>${baht(dash.fixed_variable.fixed)}</td></tr>
+          <tr><td>📈 ผันแปร (variable)</td><td>${baht(dash.fixed_variable.variable)}</td></tr>
+          <tr><td class="muted">ยังไม่ระบุ</td><td class="muted">${baht(dash.fixed_variable.unset)}</td></tr>
+        </tbody></table></div>
+      </div>
+    </div>
+
     <div class="section"><h2>ยอดขาย & ค่าใช้จ่าย ${tip('ยอดขายรายเดือน (จริง) + ค่าใช้จ่ายแยกหมวดธุรกิจ')}</h2>
       <div class="row">
         <div class="chartbox"><canvas id="salesMonthly"></canvas></div>
@@ -458,6 +477,12 @@ async function tabOverview(){
   mkChart('arAgingChart',{type:'bar',data:{labels:['0-30 วัน','31-60 วัน','61-90 วัน','90 วัน+'],datasets:[
     {label:'ยอดค้างรับ',data:[ara.d0_30,ara.d31_60,ara.d61_90,ara.d90p].map(v=>v/100),backgroundColor:['#5a9d77','#c9aa63','#d98a4c','#d4694c']}
   ]},options:chartOpts('มูลค่ายอดค้างรับแยกตามอายุหนี้ (บาท)')});
+  const apa=(dash.ap_summary&&dash.ap_summary.aging)||{d0_30:0,d31_60:0,d61_90:0,d90p:0};
+  mkChart('apAgingChart',{type:'bar',data:{labels:['ครบใน 0-30 วัน','31-60 วัน','61-90 วัน','90 วัน+'],datasets:[
+    {label:'ยอดค้างจ่าย (AP)',data:[apa.d0_30,apa.d31_60,apa.d61_90,apa.d90p].map(v=>v/100),backgroundColor:['#d4694c','#d98a4c','#c9aa63','#9a6a43']}
+  ]},options:chartOpts('ยอดเจ้าหนี้ที่จะครบกำหนดจ่าย แยกตามช่วงเวลา (บาท)')});
+  const fvd=dash.fixed_variable||{fixed:0,variable:0,unset:0};
+  mkChart('fixedVarChart',{type:'doughnut',data:{labels:['คงที่ (fixed)','ผันแปร (variable)','ยังไม่ระบุ'],datasets:[{data:[fvd.fixed,fvd.variable,fvd.unset].map(v=>v/100),backgroundColor:['#5a9d77','#d4694c','#b0a48f']}]},options:chartOpts('สัดส่วนค่าใช้จ่ายคงที่ vs ผันแปร')});
   const sm=dash.sales_monthly;
   mkChart('salesMonthly',{type:'bar',data:{labels:sm.map(x=>x.month),datasets:[
     {label:'ยอดขายจริง',data:sm.map(x=>x.actual_satang/100),backgroundColor:'#5a9d77'}
@@ -1148,7 +1173,7 @@ function tabImport(){
     cash_transactions:[['account','บัญชี','text'],['direction','เข้า/ออก','dir'],['amount','จำนวนเงิน','number'],['txn_date','วันที่','date'],['category','หมวด','text']],
     invoices:[['customer_external_id','รหัสลูกค้า','text'],['issue_date','วันออกบิล','date'],['due_date','วันครบกำหนด','date'],['amount','จำนวนเงิน','number'],['amount_paid','ชำระแล้ว','number']],
     bills:[['supplier_external_id','รหัสซัพ','text'],['issue_date','วันออกบิล','date'],['due_date','วันครบกำหนด','date'],['amount','จำนวนเงิน','number'],['category','หมวด','text']],
-    expenses:[['category','หมวด','text'],['amount','จำนวนเงิน','number'],['spent_at','วันที่','date'],['note','หมายเหตุ','text']],
+    expenses:[['category','หมวด','text'],['amount','จำนวนเงิน','number'],['spent_at','วันที่','date'],['credit_term','เครดิตเทอม(วัน) เงินสด=0','number'],['expense_kind','ประเภท','fv'],['note','หมายเหตุ','text']],
     budgets:[['period','เดือน(YYYY-MM)','text'],['category','หมวด','text'],['budget_type','รายรับ/รายจ่าย','bt'],['amount','จำนวนเงิน','number']],
   };
   function renderFields(){
@@ -1156,6 +1181,7 @@ function tabImport(){
     document.getElementById('impFields').innerHTML=fieldsByEntity[ent].map(([k,label,t])=>{
       if(t==='dir') return `<label>${label}<select data-k="${k}"><option value="in">เข้า</option><option value="out">ออก</option></select></label>`;
       if(t==='bt') return `<label>${label}<select data-k="${k}"><option value="expense">รายจ่าย</option><option value="revenue">รายรับ</option></select></label>`;
+      if(t==='fv') return `<label>${label}<select data-k="${k}"><option value="">-</option><option value="fixed">คงที่ (fixed)</option><option value="variable">ผันแปร (variable)</option></select></label>`;
       return `<label>${label}<input data-k="${k}" type="${t}" /></label>`;
     }).join('');
   }

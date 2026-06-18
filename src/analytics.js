@@ -603,6 +603,39 @@ export function expenseBuckets(expenses) {
   return { buckets: b, by_category: byCat, total_satang: total };
 }
 
+// AP (เจ้าหนี้การค้า) จาก expenses ที่ซื้อเชื่อ (credit_term_days>0; =0 คือจ่ายเงินสด ไม่เป็น AP)
+// ประเมินยอดค้างจ่าย (ยังไม่ถึงกำหนด) + aging ตามวันที่จะครบกำหนด + DPO (เครดิตเทอมเฉลี่ยถ่วงน้ำหนัก)
+export function apFromExpenses(expenses, asOf) {
+  const today = asOf ? new Date(asOf) : new Date();
+  const aging = { d0_30: 0, d31_60: 0, d61_90: 0, d90p: 0 };
+  let outstanding = 0, wTerm = 0, creditTotal = 0;
+  for (const e of expenses) {
+    const term = e.credit_term_days || 0;
+    const amt = e.amount_satang || 0;
+    if (term > 0) { creditTotal += amt; wTerm += amt * term; }
+    if (term <= 0 || !e.spent_at) continue;
+    const due = new Date(new Date(e.spent_at).getTime() + term * 86400000);
+    if (due > today) {                                    // ยังไม่ถึงกำหนด = ยังค้างจ่าย (AP)
+      outstanding += amt;
+      const d = Math.floor((due - today) / 86400000);
+      if (d <= 30) aging.d0_30 += amt; else if (d <= 60) aging.d31_60 += amt; else if (d <= 90) aging.d61_90 += amt; else aging.d90p += amt;
+    }
+  }
+  return { ap_outstanding_satang: outstanding, aging, dpo_days: creditTotal ? Math.round(wTerm / creditTotal) : 0, credit_total_satang: creditTotal };
+}
+
+// แยกค่าใช้จ่ายคงที่ (fixed) vs ผันแปร (variable) — ตามคอลัมน์ expense_kind
+export function fixedVariable(expenses) {
+  let fixed = 0, variable = 0, unset = 0;
+  for (const e of expenses) {
+    const amt = e.amount_satang || 0;
+    if (e.expense_kind === 'fixed') fixed += amt;
+    else if (e.expense_kind === 'variable') variable += amt;
+    else unset += amt;
+  }
+  return { fixed, variable, unset };
+}
+
 // ยอดขายรายเดือน: ประมาณการ (budget) vs จริง (invoiced)
 export function salesMonthly(invoices, budgets) {
   const actual = {}, budget = {};

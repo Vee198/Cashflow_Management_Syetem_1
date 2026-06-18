@@ -212,6 +212,9 @@ app.get('/api/dashboard', async (c) => {
       expense_buckets: { buckets, by_category: eb.by_category, total_satang: prodCost + overheadExp },
       ar_by_customer: A.arByCustomer(invF, customers, asOf),
       ar_aging: A.arAgingByIssue(invF, asOf),
+      ap_summary: A.apFromExpenses(expF, asOf),
+      dpo_days: A.apFromExpenses(expF, asOf).dpo_days,
+      fixed_variable: A.fixedVariable(expF),
       sales_monthly: A.salesMonthly(invF, budgets),
       production_split: ps,
     });
