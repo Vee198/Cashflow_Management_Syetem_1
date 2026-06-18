@@ -68,6 +68,7 @@ Cashflow_System/
 - ระบบ map staging → ตารางจริง (jobs, invoices, bills, ฯลฯ) ผ่าน `src/import.js`
 - ทุก row เก็บ `source` + `external_id` ไว้กันข้อมูลซ้ำ (idempotent upsert)
 - **ล้างข้อมูล demo:** `clear_demo.sql` ลบเฉพาะ `source='seed'` (เก็บ `material_purchases`/ค่าสีที่อัปโหลด และข้อมูลจริงที่ import ไว้) — ใช้ก่อนรับ Actual GL; **เลิกรัน `npm run db:seed:remote` บน production** (มันใส่ dummy กลับ)
+- **สคริปต์ล้างข้อมูล 3 ระดับ:** `clear_demo.sql` (ลบเฉพาะ seed) · `clear_imported.sql` (ลบทุกตาราง **เก็บค่าสี**) · `clear_all.sql` (**ลบหมดจริง รวมค่าสี + ประวัติ** เพื่อเริ่มใหม่สะอาด); ครั้งล่าสุดผู้ใช้สั่งรีเซ็ตทั้งระบบ → รัน `clear_all.sql` บน remote (material_purchases 2252→0, ทุกตาราง=0) เตรียมรับ Actual ใหม่
 
 > **อย่า hard-code โครงสร้างไฟล์ GL.** ถ้าต้องรับฟิลด์ใหม่ ให้แก้ที่ IMPORT_CONTRACT ก่อน
 
