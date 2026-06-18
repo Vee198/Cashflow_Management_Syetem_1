@@ -1,6 +1,6 @@
 // Service Worker — WAYTHAI-FORYOU Cashflow PWA
 // HTML = network-first (ได้เวอร์ชันใหม่เสมอเมื่อออนไลน์), static = cache-first, /api/* = ไม่แคช
-const CACHE = 'waythai-cashflow-v13';
+const CACHE = 'waythai-cashflow-v14';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (e) => {

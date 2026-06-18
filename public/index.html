@@ -581,9 +581,20 @@ async function tabPnL(){
   if(!monthly.length){ setMain('<div class="section"><h2>งบกำไรขาดทุน</h2><div class="card"><span class="muted">ยังไม่มีข้อมูล — อัปโหลดออเดอร์ + รายจ่ายก่อน (รายได้จากชีต order, ต้นทุน/ค่าใช้จ่ายจากชีต expenses)</span></div></div>'); return; }
   window.__pnl=monthly;
   const months=monthly.map(x=>x.month);
+  // พยากรณ์ทั้งปี = เฉลี่ยต่อเดือนจาก Actual × 12
+  const _all=pnlRangeAgg(monthly,months[0],months[months.length-1]); const _mwd=monthly.length||1;
+  const fy=k=>Math.round(_all[k]/_mwd*12); const FY={revenue:fy('revenue'),cogs:fy('cogs'),oh:fy('oh'),gross:fy('gross'),net:fy('net')};
   const SS='padding:7px 10px;border:1px solid #cfc9bd;border-radius:8px;background:#fff;font-family:inherit;font-size:13px';
   const ms=id=>`<select id="${id}" style="${SS}">${months.map(m=>`<option value="${m}">${m}</option>`).join('')}</select>`;
   setMain(`
+    <div class="section"><h2>📅 พยากรณ์ทั้งปี (Annualized) ${tip('ถ้าทั้งปีเป็นไปตามค่าเฉลี่ยต่อเดือนของ Actual ปัจจุบัน — เฉลี่ยจาก '+_mwd+' เดือนที่มีข้อมูล × 12')}</h2>
+      <div class="grid cards">
+        ${card('รายได้ทั้งปี (คาด)','เฉลี่ย/เดือน × 12', baht(FY.revenue), 'จาก '+_mwd+' เดือน Actual', null)}
+        ${card('กำไรขั้นต้นทั้งปี (คาด)','รายได้ − COGS', baht(FY.gross), 'อัตรา '+pct(FY.revenue?Math.round(FY.gross/FY.revenue*1000)/10:0), FY.gross>0?'green':'red')}
+        ${card('กำไรสุทธิทั้งปี (คาด)','ขั้นต้น − OH', baht(FY.net), FY.net>=0?'คาดทั้งปีมีกำไร ✓':'คาดทั้งปีขาดทุน', FY.net>=0?'green':'red')}
+      </div>
+      <div class="muted" style="font-size:12px;margin-top:6px">* ประมาณการอย่างง่ายจากค่าเฉลี่ย Actual — ยังไม่รวมฤดูกาล/งานพิเศษ ใช้เป็นแนวโน้มคร่าวๆ</div>
+    </div>
     <div class="section"><h2>📊 งบกำไรขาดทุน (Income Statement) ${tip('เลือกช่วงเดือน 2 งวดมาเทียบ — รวมหลายเดือน = ไตรมาส · Vertical = % ของยอดขาย · Horizontal = % เปลี่ยนแปลง งวด B เทียบ A')}</h2>
       <div class="card">
         <div class="row" style="gap:18px;flex-wrap:wrap;align-items:flex-end">
@@ -893,9 +904,17 @@ async function tabABC(){
 }
 
 // ── เฟส 6: ที่ปรึกษาการเงินอัตโนมัติ (Recommendations) ──────
+function setAdvisorCust(c){ state.advisorCust = (state.advisorCust===c? null : c); tabAdvisor(); }
 async function tabAdvisor(){
   const d=await api('/recommendations'); const recs=d.recommendations, conc=d.concentration;
   const sev={red:'ความเสี่ยงสูง',yellow:'ควรเฝ้าระวัง',green:'สถานะดี'};
+  const sel=state.advisorCust; const selRow=sel?conc.rows.find(x=>x.customer===sel):null;
+  const concFilter = sel
+    ? `<div class="card card-green" style="margin-bottom:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <button class="primary" style="padding:9px 20px;font-size:14px" onclick="setAdvisorCust(null)">✕ ล้างตัวกรอง / ดูทั้งหมด</button>
+        <span><b>🔎 โฟกัสลูกค้า:</b> <span class="pill pill-green">${sel}</span>${selRow?` — ยอดขาย <b>${baht(selRow.satang)}</b> คิดเป็น <b>${pct(selRow.pct)}</b> ของยอดขายรวม${selRow.pct>=30?' <span style="color:var(--red)">⚠ พึ่งพารายนี้สูง</span>':''}`:''}</span>
+       </div>`
+    : `<div class="muted" style="font-size:12px;margin-bottom:10px">💡 คลิกที่ <b>ชิ้นโดนัท</b> หรือ <b>แถวในตาราง</b> เพื่อโฟกัสลูกค้ารายนั้น (Interactive) — แล้วกด "✕ ล้างตัวกรอง" เพื่อกลับ</div>`;
   setMain(`
     <div class="section"><h2>💡 ที่ปรึกษาการเงินอัตโนมัติ ${tip('ระบบอ่าน KPI ทั้งหมดแล้วจัดอันดับสิ่งที่ควรทำตามความเสี่ยง/ผลกระทบ — เริ่มจากบนสุด')}</h2>
       ${recs.map((r,i)=>`<div class="card card-${r.severity}" style="margin-bottom:12px">
@@ -909,16 +928,17 @@ async function tabAdvisor(){
         ${r.impact?`<div style="margin-top:6px;font-size:13px;color:var(--accent-d)"><b>ผลที่คาดว่าจะได้:</b> ${r.impact}</div>`:''}
       </div>`).join('')}
     </div>
-    <div class="section"><h2>การกระจุกตัวของลูกค้า (Customer Concentration) ${tip('ลูกค้ารายใหญ่คิดเป็นสัดส่วนยอดขายเท่าไร — กระจุกมาก = เสี่ยงถ้าเสียลูกค้ารายนั้น')}</h2>
+    <div class="section"><h2>การกระจุกตัวของลูกค้า (Customer Concentration) ${tip('ลูกค้ารายใหญ่คิดเป็นสัดส่วนยอดขายเท่าไร — กระจุกมาก = เสี่ยงถ้าเสียลูกค้ารายนั้น · คลิกเพื่อโฟกัส')}</h2>
+      ${concFilter}
       <div class="row">
         <div class="chartbox"><canvas id="concChart"></canvas></div>
         <div class="card" style="flex:1"><table><thead><tr><th>ลูกค้า</th><th>ยอดขาย</th><th>% ของยอดขาย</th></tr></thead><tbody>
-          ${conc.rows.map(x=>`<tr><td>${x.customer}</td><td>${baht(x.satang)}</td><td>${pct(x.pct)}</td></tr>`).join('')||'<tr><td colspan=3 class="muted">ยังไม่มีข้อมูลยอดขาย</td></tr>'}
+          ${conc.rows.map(x=>`<tr style="cursor:pointer;${sel===x.customer?'background:rgba(90,157,119,.16);font-weight:600':''}" title="คลิกเพื่อโฟกัส" onclick="setAdvisorCust(decodeURIComponent('${encodeURIComponent(x.customer)}'))"><td>${x.customer}</td><td>${baht(x.satang)}</td><td>${pct(x.pct)}</td></tr>`).join('')||'<tr><td colspan=3 class="muted">ยังไม่มีข้อมูลยอดขาย</td></tr>'}
         </tbody></table></div>
       </div>
     </div>
   `);
-  mkChart('concChart',{type:'doughnut',data:{labels:conc.rows.map(x=>x.customer),datasets:[{data:conc.rows.map(x=>x.satang/100),backgroundColor:['#5a9d77','#9a6a43','#c9aa63','#d4694c','#7cb295','#b0a48f']}]},options:chartOpts('สัดส่วนยอดขายตามลูกค้า')});
+  mkChart('concChart',{type:'doughnut',data:{labels:conc.rows.map(x=>x.customer),datasets:[{data:conc.rows.map(x=>x.satang/100),backgroundColor:conc.rows.map(x=>sel&&sel!==x.customer?'#d9d4c7':null).map((c,i)=>c||['#5a9d77','#9a6a43','#c9aa63','#d4694c','#7cb295','#b0a48f','#c98b5a','#86a98f'][i%8])}]},options:{...chartOpts('สัดส่วนยอดขายตามลูกค้า (คลิกเพื่อโฟกัส)'),onClick:(e,els,ch)=>{ if(els.length){ setAdvisorCust(ch.data.labels[els[0].index]); } }}});
 }
 
 // ── วิเคราะห์ต้นทุนสี/วัตถุดิบ (จาก material_purchases) ──────
