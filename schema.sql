@@ -211,6 +211,8 @@ CREATE TABLE IF NOT EXISTS expenses (
   note          TEXT,
   credit_term_days INTEGER DEFAULT 0, -- เครดิตเทอม (วัน) — 0 = จ่ายเงินสดทันที, >0 = ซื้อเชื่อ (AP)
   expense_kind  TEXT,                 -- fixed = ค่าใช้จ่ายคงที่ | variable = ผันแปร
+  cost_class    TEXT,                 -- COGS = ต้นทุนขาย | Expense = ค่าใช้จ่ายดำเนินงาน (SG&A)
+  cogs_type     TEXT,                 -- (เฉพาะแถว COGS) direct_material | direct_labor | overhead
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(source, external_id)
 );

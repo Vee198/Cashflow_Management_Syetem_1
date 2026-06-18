@@ -166,44 +166,34 @@ app.get('/api/dashboard', async (c) => {
     let billed = 0, received = 0;
     for (const i of invF) { if (i.status === 'void') continue; billed += i.amount_satang; received += (i.amount_paid_satang || 0); }
     const eb = A.expenseBuckets(expF);
-    let jobsCost = 0, jobsPaint = 0, jw = 0, jl = 0, jsh = 0;
-    for (const j of jobF) { jobsCost += j.total_cost_satang || 0; jobsPaint += j.cost_paint_satang || 0; jw += j.cost_wood_satang || 0; jl += j.cost_labor_satang || 0; jsh += j.cost_shipping_satang || 0; }
-    const overheadExp = eb.buckets.marketing + eb.buckets.ads + eb.buckets.rent + eb.buckets.overhead;
+    // ── COGS / ค่าใช้จ่ายดำเนินงาน จากชีต COGS&Expense ตาม cost_class ──
+    //    COGS = แถว cost_class=COGS (แยก DM/DL/Overhead ตาม cogs_type) · OpEx = แถว cost_class=Expense (แยกตาม category)
+    //    ต้นทุนในชีต order (J-M) ใช้เฉพาะ margin รายออเดอร์ (กำไรรายงาน) ไม่เข้า P&L · เงินเดือนกรอกในชีตเอง (เลิก auto-pull)
+    let cogsDM = 0, cogsDL = 0, cogsMOH = 0, opexTotal = 0, paintCost = 0;
+    const opexByCat = {};
+    for (const e of expF) {
+      const amt = e.amount_satang || 0;
+      if (e.category === 'paint') paintCost += amt;
+      if (A.expIsCOGS(e)) {
+        const t = A.expCogsType(e);
+        if (t === 'direct_material') cogsDM += amt; else if (t === 'direct_labor') cogsDL += amt; else cogsMOH += amt;
+      } else { const cc = e.category || 'other'; opexByCat[cc] = (opexByCat[cc] || 0) + amt; opexTotal += amt; }
+    }
     let mpAll = 0, mpPaint = 0;
     for (const p of purF) { mpAll += p.total_incl_vat_satang || 0; if (p.category === 'paint') mpPaint += p.total_incl_vat_satang || 0; }
-    const xb = eb.by_category;
-    // ── COGS (P&L) = ต้นทุนวัสดุ/ผลิต "ที่จ่ายจริง" จาก expenses + material_purchases เท่านั้น ──
-    //    ต้นทุนในชีต order (J-M: jobsCost/jobsPaint/jw/jl/jsh) ใช้สำหรับวิเคราะห์กำไรรายออเดอร์ (margin tab) เท่านั้น
-    //    *ไม่บวกซ้ำใน P&L* เพื่อเลี่ยงการนับต้นทุน 2-3 รอบ (เคยทำกำไรสุทธิติดลบเทียม)
-    // เงินเดือนพนักงาน (auto จาก employees) × จำนวนเดือนที่มีข้อมูลในช่วง — ฝ่ายผลิต→COGS, อื่นๆ→OH
-    const monthsSet = new Set();
-    for (const j of jobF) { const k = (j.started_at || '').slice(0, 7); if (k) monthsSet.add(k); }
-    for (const e of expF) { const k = (e.spent_at || '').slice(0, 7); if (k) monthsSet.add(k); }
-    const monthsCount = monthsSet.size || 1;
-    const sal = A.employeeSalary(employees);
-    const salCogs = sal.cogs * monthsCount, salOh = sal.oh * monthsCount;
-    const prodCost = eb.buckets.production + mpAll + salCogs;              // COGS = รายจ่ายหมวดผลิต + วัตถุดิบ + เงินเดือนฝ่ายผลิต
-    const paintCost = (xb.paint || 0) + mpPaint;
-    const buckets = { production: prodCost, marketing: eb.buckets.marketing, ads: eb.buckets.ads, rent: eb.buckets.rent, overhead: eb.buckets.overhead };
+    cogsDM += mpAll; paintCost += mpPaint;                                  // material_purchases (legacy) = วัตถุดิบทางตรง
+    const prodCost = cogsDM + cogsDL + cogsMOH;                             // COGS รวม
+    const ohTotal = opexTotal;                                             // ค่าใช้จ่ายดำเนินงานรวม
     const ps = A.profitByProductionType(jobF);
     const jobsRevenue = ps.self.revenue + ps.outsourced.revenue;
-    const ohTotal = overheadExp + salOh;                                  // OH รวมเงินเดือนสนง./บริหาร
+    const buckets = { production: prodCost, marketing: opexByCat.marketing || 0, ads: opexByCat.ads || 0, rent: opexByCat.rent || 0, overhead: ohTotal - ((opexByCat.marketing || 0) + (opexByCat.ads || 0) + (opexByCat.rent || 0)) };
     const cogs_breakdown = [
-      { name: 'ค่าสี', satang: paintCost },
-      { name: 'ค่าไม้', satang: (xb.wood || 0) },
-      { name: 'ค่าแรง', satang: (xb.labor || 0) },
-      { name: 'เงินเดือน (ฝ่ายผลิต)', satang: salCogs + (xb.salary || 0) },
-      { name: 'วัตถุดิบอื่น/ฮาร์ดแวร์', satang: (mpAll - mpPaint) + (xb.hardware || 0) },
+      { name: 'วัตถุดิบทางตรง (Direct Material)', satang: cogsDM },
+      { name: 'ค่าแรงทางตรง (Direct Labor)', satang: cogsDL },
+      { name: 'โสหุ้ยการผลิต (Overhead)', satang: cogsMOH },
     ].filter((x) => x.satang > 0).sort((a, b) => b.satang - a.satang);
-    const oh_breakdown = [
-      { name: 'เงินเดือน (สนง./บริหาร)', satang: salOh },
-      { name: 'ค่าเช่า', satang: xb.rent || 0 },
-      { name: 'ค่าน้ำ-ไฟ', satang: xb.utility || 0 },
-      { name: 'การตลาด', satang: xb.marketing || 0 },
-      { name: 'โฆษณา (Ads)', satang: xb.ads || 0 },
-      { name: 'ค่าขนส่ง', satang: xb.transport || 0 },
-      { name: 'อื่นๆ', satang: (xb.other || 0) + (xb.overhead || 0) },
-    ].filter((x) => x.satang > 0).sort((a, b) => b.satang - a.satang);
+    const OH_LBL = { rent: 'ค่าเช่า', utility: 'ค่าน้ำ-ไฟ', marketing: 'การตลาด', ads: 'โฆษณา (Ads)', transport: 'ค่าขนส่ง', salary: 'เงินเดือน', labor: 'ค่าแรง', paint: 'ค่าสี', wood: 'ค่าไม้', hardware: 'ฮาร์ดแวร์', overhead: 'โสหุ้ย', other: 'อื่นๆ' };
+    const oh_breakdown = Object.entries(opexByCat).map(([cc, s]) => ({ name: OH_LBL[cc] || cc, satang: s })).filter((x) => x.satang > 0).sort((a, b) => b.satang - a.satang);
     return ok(c, {
       as_of: asOf, from: from || null, to: to || null,
       cash_on_hand_satang: cash,
@@ -261,12 +251,8 @@ app.get('/api/paint-analysis', async (c) => {
 // ---------- งบกำไรขาดทุนรายเดือน (P&L) ----------
 app.get('/api/pnl', async (c) => {
   try {
-    const [jobs, expenses, employees] = await Promise.all([repo.getJobs(c.env.DB), repo.getExpenses(c.env.DB), repo.getEmployees(c.env.DB)]);
-    return ok(c, {
-      monthly: A.pnlMonthly(jobs, expenses, employees),
-      cogs_cats: ['paint', 'wood', 'hardware', 'labor', 'salary'],
-      oh_cats: ['rent', 'utility', 'marketing', 'ads', 'transport', 'overhead', 'other', 'salary_oh'],
-    });
+    const [jobs, expenses] = await Promise.all([repo.getJobs(c.env.DB), repo.getExpenses(c.env.DB)]);
+    return ok(c, { monthly: A.pnlMonthly(jobs, expenses) });
   } catch (e) { return err(c, e, 500); }
 });
 
@@ -303,18 +289,29 @@ app.get('/api/cost', async (c) => {
   try {
     const db = c.env.DB;
     const [jobCosts, jobs, expenses] = await Promise.all([repo.getJobCosts(db), repo.getJobs(db), repo.getExpenses(db)]);
-    // ต้นทุนจากชีต order (J-M: cost_wood/paint/labor/shipping) — เลขต้นทุนต่อออเดอร์
-    const jc = A.jobCostBreakdown(jobs);
-    const revenue = jc.revenue_satang || await repo.getTotalRevenue(db);
-    const paintPctRev = revenue ? Math.round(jc.cost_paint_satang / revenue * 1000) / 10 : 0;
-    const paintPctCogs = jc.total_satang ? Math.round(jc.cost_paint_satang / jc.total_satang * 1000) / 10 : 0;
+    // COGS + ค่าสี จากชีต COGS&Expense (cost_class/category) — รายได้จาก jobs(quoted)
+    let cogsDM = 0, cogsDL = 0, cogsMOH = 0, paint = 0, revenue = 0, doors = 0;
+    for (const j of jobs) { revenue += j.quoted_price_satang || 0; doors += j.quantity || j.qty_ordered || 0; }
+    for (const e of expenses) {
+      const amt = e.amount_satang || 0;
+      if (e.category === 'paint') paint += amt;
+      if (A.expIsCOGS(e)) { const t = A.expCogsType(e); if (t === 'direct_material') cogsDM += amt; else if (t === 'direct_labor') cogsDL += amt; else cogsMOH += amt; }
+    }
+    const cogsTotal = cogsDM + cogsDL + cogsMOH;
+    const breakdown = [
+      { name: 'วัตถุดิบทางตรง (Direct Material)', satang: cogsDM },
+      { name: 'ค่าแรงทางตรง (Direct Labor)', satang: cogsDL },
+      { name: 'โสหุ้ยการผลิต (Overhead)', satang: cogsMOH },
+    ].filter((x) => x.satang > 0).sort((a, b) => b.satang - a.satang);
+    const paintPctRev = revenue ? Math.round(paint / revenue * 1000) / 10 : 0;
+    const paintPctCogs = cogsTotal ? Math.round(paint / cogsTotal * 1000) / 10 : 0;
     return ok(c, {
-      cogs: { total_satang: jc.total_satang, breakdown: jc.breakdown },
-      gross_margin: A.grossMargin(revenue, jc.total_satang),
+      cogs: { total_satang: cogsTotal, breakdown },
+      gross_margin: A.grossMargin(revenue, cogsTotal),
       paint: {
         paint_pct_of_revenue: paintPctRev, paint_pct_of_cogs: paintPctCogs,
-        paint_per_door_satang: jc.doors ? Math.round(jc.cost_paint_satang / jc.doors) : 0,
-        paint_total_satang: jc.cost_paint_satang, trend: [], trend_direction: 'flat',
+        paint_per_door_satang: doors ? Math.round(paint / doors) : 0,
+        paint_total_satang: paint, trend: [], trend_direction: 'flat',
         status: paintPctRev > 25 ? 'red' : paintPctRev > 15 ? 'yellow' : 'green',
       },
       expense_to_sales: A.expenseToSales(expenses, revenue),

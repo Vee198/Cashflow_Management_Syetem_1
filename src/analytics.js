@@ -655,20 +655,43 @@ export function employeeSalary(employees) {
   return { cogs, oh, per_month: cogs + oh };
 }
 
-// งบกำไรขาดทุนรายเดือน (สำหรับแท็บ P&L) — รายได้จาก jobs(quoted, ตาม started_at), ต้นทุน/ค่าใช้จ่ายจาก expenses(ตาม spent_at)
-// + เงินเดือนพนักงาน (auto จาก employees) เข้าทุกเดือนที่มีข้อมูล: ฝ่ายผลิต→cats.salary(COGS), อื่นๆ→cats.salary_oh(OH)
-// คืน category ดิบรายเดือน ให้ frontend รวมช่วง + แยก COGS/OH + คำนวณ vertical/horizontal เอง
-export function pnlMonthly(jobs, expenses, employees) {
+// ── จัดประเภทแถวในชีต COGS&Expense (เดิม expenses) ──
+//   cost_class = COGS (ต้นทุนขาย) | Expense (ค่าใช้จ่ายดำเนินงาน); ถ้าไม่ระบุ → เดาจาก category
+const COGS_FALLBACK_CAT = new Set(['paint', 'wood', 'hardware', 'labor', 'salary']);
+export function expIsCOGS(e) {
+  const cc = (e.cost_class || '').toString().trim().toLowerCase();
+  if (cc === 'cogs') return true;
+  if (cc === 'expense' || cc === 'opex' || cc === 'sg&a') return false;
+  return COGS_FALLBACK_CAT.has(e.category);
+}
+//   cogs_type = direct_material | direct_labor | overhead (เฉพาะแถว COGS); ถ้าไม่ระบุ → เดาจาก category
+export function expCogsType(e) {
+  const t = (e.cogs_type || '').toString().trim().toLowerCase();
+  if (t.includes('material') || t === 'dm') return 'direct_material';
+  if (t.includes('labor') || t.includes('labour') || t === 'dl') return 'direct_labor';
+  if (t.includes('overhead') || t === 'moh' || t === 'oh') return 'overhead';
+  if (['paint', 'wood', 'hardware'].includes(e.category)) return 'direct_material';
+  if (['labor', 'salary'].includes(e.category)) return 'direct_labor';
+  return 'overhead';
+}
+
+// งบกำไรขาดทุนรายเดือน (แท็บ P&L) — รายได้จาก jobs(quoted, started_at); ต้นทุน/ค่าใช้จ่ายจาก COGS&Expense(spent_at)
+// COGS แยก DM/DL/Overhead ตาม cogs_type · ค่าใช้จ่ายดำเนินงาน (opex) แยกตาม category
+export function pnlMonthly(jobs, expenses) {
   const m = {};
-  const ens = (k) => { if (!m[k]) m[k] = { revenue: 0, cats: {} }; return m[k]; };
+  const ens = (k) => { if (!m[k]) m[k] = { revenue: 0, cogs: { direct_material: 0, direct_labor: 0, overhead: 0 }, opex: {} }; return m[k]; };
   for (const j of jobs) { const k = ym(j.started_at); if (k) ens(k).revenue += j.quoted_price_satang || 0; }
-  for (const e of expenses) { const k = ym(e.spent_at); if (!k) continue; const o = ens(k); o.cats[e.category] = (o.cats[e.category] || 0) + (e.amount_satang || 0); }
-  const sal = employeeSalary(employees);
-  if (sal.per_month > 0) for (const k of Object.keys(m)) {
-    if (sal.cogs) m[k].cats.salary = (m[k].cats.salary || 0) + sal.cogs;
-    if (sal.oh) m[k].cats.salary_oh = (m[k].cats.salary_oh || 0) + sal.oh;
+  for (const e of expenses) {
+    const k = ym(e.spent_at); if (!k) continue; const o = ens(k); const amt = e.amount_satang || 0;
+    if (expIsCOGS(e)) o.cogs[expCogsType(e)] += amt;
+    else { const c = e.category || 'other'; o.opex[c] = (o.opex[c] || 0) + amt; }
   }
-  return Object.keys(m).sort().map((k) => ({ month: k, revenue: m[k].revenue, cats: m[k].cats }));
+  return Object.keys(m).sort().map((k) => {
+    const o = m[k];
+    const cogs_total = o.cogs.direct_material + o.cogs.direct_labor + o.cogs.overhead;
+    const opex_total = Object.values(o.opex).reduce((s, v) => s + v, 0);
+    return { month: k, revenue: o.revenue, cogs: o.cogs, opex: o.opex, cogs_total, opex_total };
+  });
 }
 
 // แยกค่าใช้จ่ายคงที่ (fixed) vs ผันแปร (variable) — ตามคอลัมน์ expense_kind

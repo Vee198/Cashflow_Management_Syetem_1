@@ -568,10 +568,14 @@ const PNL_CATLBL={paint:'ค่าสี',wood:'ค่าไม้',hardware:'�
 const PNL_COGS=['paint','wood','hardware','labor','salary'];
 const PNL_OH=['salary_oh','rent','utility','marketing','ads','transport','overhead','other'];
 function pnlRangeAgg(monthly,from,to){
-  const r={revenue:0,cats:{}};
-  for(const m of monthly){ if(m.month>=from&&m.month<=to){ r.revenue+=m.revenue; for(const k in m.cats) r.cats[k]=(r.cats[k]||0)+m.cats[k]; } }
-  r.cogs=PNL_COGS.reduce((s,k)=>s+(r.cats[k]||0),0);
-  r.oh=PNL_OH.reduce((s,k)=>s+(r.cats[k]||0),0);
+  const r={revenue:0,dm:0,dl:0,moh:0,opex:{}};
+  for(const m of monthly){ if(m.month>=from&&m.month<=to){
+    r.revenue+=m.revenue;
+    r.dm+=(m.cogs&&m.cogs.direct_material)||0; r.dl+=(m.cogs&&m.cogs.direct_labor)||0; r.moh+=(m.cogs&&m.cogs.overhead)||0;
+    for(const k in (m.opex||{})) r.opex[k]=(r.opex[k]||0)+m.opex[k];
+  } }
+  r.cogs=r.dm+r.dl+r.moh;
+  r.oh=Object.values(r.opex).reduce((s,v)=>s+v,0);
   r.gross=r.revenue-r.cogs; r.net=r.gross-r.oh;
   return r;
 }
@@ -630,9 +634,8 @@ function runPnL(){
       <td style="text-align:right">${baht(bVal)}</td><td style="text-align:right;color:var(--muted);font-size:12px">${vp(bVal,B.revenue).toFixed(1)}%</td>
       <td style="text-align:right;color:${hc};font-weight:600">${h>0?'+':''}${h.toFixed(1)}%</td></tr>`;
   };
-  const catRow=k=>row(PNL_CATLBL[k]||k, A.cats[k]||0, B.cats[k]||0, {sub:true,cost:true});
-  const cogsCats=PNL_COGS.filter(k=>(A.cats[k]||B.cats[k]));
-  const ohCats=PNL_OH.filter(k=>(A.cats[k]||B.cats[k]));
+  const opexKeys=[...new Set([...Object.keys(A.opex),...Object.keys(B.opex)])].sort((x,y)=>((B.opex[y]||0)+(A.opex[y]||0))-((B.opex[x]||0)+(A.opex[x]||0)));
+  const opexRow=k=>row(PNL_CATLBL[k]||k, A.opex[k]||0, B.opex[k]||0, {sub:true,cost:true});
   document.getElementById('pnlTable').innerHTML=`
     <table style="width:100%;border-collapse:collapse">
       <thead><tr style="border-bottom:2px solid var(--line)"><th style="text-align:left">รายการ</th>
@@ -643,14 +646,16 @@ function runPnL(){
       <tbody>
         ${row('รายได้รวม (Revenue)',A.revenue,B.revenue,{bold:true})}
         ${row('ต้นทุนขาย (COGS)',A.cogs,B.cogs,{head:true,bold:true,cost:true})}
-        ${cogsCats.map(catRow).join('')}
+        ${row('วัตถุดิบทางตรง (Direct Material)',A.dm,B.dm,{sub:true,cost:true})}
+        ${row('ค่าแรงทางตรง (Direct Labor)',A.dl,B.dl,{sub:true,cost:true})}
+        ${row('โสหุ้ยการผลิต (Overhead)',A.moh,B.moh,{sub:true,cost:true})}
         ${row('กำไรขั้นต้น (Gross Profit)',A.gross,B.gross,{bold:true})}
-        ${row('ค่าใช้จ่ายดำเนินงาน (OH)',A.oh,B.oh,{head:true,bold:true,cost:true})}
-        ${ohCats.map(catRow).join('')}
+        ${row('ค่าใช้จ่ายดำเนินงาน (Operating Exp.)',A.oh,B.oh,{head:true,bold:true,cost:true})}
+        ${opexKeys.map(opexRow).join('')}
         ${row('กำไรสุทธิ (Net Profit)',A.net,B.net,{bold:true})}
       </tbody>
     </table>
-    <div class="muted" style="font-size:12px;margin-top:10px">Vertical = % ของยอดขายในงวดนั้น · เปลี่ยนแปลง (Horizontal) = % เพิ่ม/ลดของงวด B เทียบงวด A — รายได้/กำไรเพิ่ม=เขียว, ต้นทุน/ค่าใช้จ่ายเพิ่ม=แดง</div>`;
+    <div class="muted" style="font-size:12px;margin-top:10px">COGS แยก Direct Material / Direct Labor / Overhead ตามที่กรอกในชีต COGS&Expense · Vertical = % ของยอดขาย · เปลี่ยนแปลง (Horizontal) = % B เทียบ A (รายได้/กำไรเพิ่ม=เขียว, ต้นทุนเพิ่ม=แดง)</div>`;
 }
 function exportPnLCSV(){
   const ab=window.__pnlAB; if(!ab) return; const {A,B,labA,labB}=ab;
@@ -658,9 +663,9 @@ function exportPnLCSV(){
   const rows=[['รายการ','งวดA('+labA+')','%ขายA','งวดB('+labB+')','%ขายB','เปลี่ยนแปลง%']];
   const push=(label,a,b)=>rows.push([label,b2(a),v(a,A.revenue),b2(b),v(b,B.revenue),h(a,b)]);
   push('รายได้รวม',A.revenue,B.revenue); push('ต้นทุนขาย (COGS)',A.cogs,B.cogs);
-  PNL_COGS.forEach(k=>{if(A.cats[k]||B.cats[k])push('  '+(PNL_CATLBL[k]||k),A.cats[k]||0,B.cats[k]||0);});
-  push('กำไรขั้นต้น',A.gross,B.gross); push('ค่าใช้จ่ายดำเนินงาน (OH)',A.oh,B.oh);
-  PNL_OH.forEach(k=>{if(A.cats[k]||B.cats[k])push('  '+(PNL_CATLBL[k]||k),A.cats[k]||0,B.cats[k]||0);});
+  push('  วัตถุดิบทางตรง (Direct Material)',A.dm,B.dm); push('  ค่าแรงทางตรง (Direct Labor)',A.dl,B.dl); push('  โสหุ้ยการผลิต (Overhead)',A.moh,B.moh);
+  push('กำไรขั้นต้น',A.gross,B.gross); push('ค่าใช้จ่ายดำเนินงาน',A.oh,B.oh);
+  [...new Set([...Object.keys(A.opex),...Object.keys(B.opex)])].forEach(k=>push('  '+(PNL_CATLBL[k]||k),A.opex[k]||0,B.opex[k]||0));
   push('กำไรสุทธิ',A.net,B.net);
   const csv='﻿'+rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
   const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
@@ -1199,9 +1204,10 @@ async function importExcel(file){
     const buf=await file.arrayBuffer();
     const wb=XLSX.read(buf,{type:'array',cellDates:true});
     const source='excel_'+(file.name||'upload').replace(/[^a-zA-Z0-9_.-]/g,'_'); // source ตามชื่อไฟล์ → อัปไฟล์เดิมซ้ำ = upsert ไม่เบิ้ล
+    const SHEET_ALIAS={'COGS&Expense':'expenses','COGS & Expense':'expenses'};   // ชีตชื่อใหม่ map กลับ entity เดิม
     // ── กันซ้ำ: เตือนถ้าเคยอัปโหลดกลุ่มข้อมูลเดียวกันด้วย "ชื่อไฟล์อื่น" (source ต่าง = ระบบนับเป็นคนละชุด → เบิ้ล) ──
     try{
-      const sheetsHere=wb.SheetNames.filter(sn=>ENTITIES.includes(sn));
+      const sheetsHere=[...new Set(wb.SheetNames.map(sn=>SHEET_ALIAS[sn]||sn))].filter(e=>ENTITIES.includes(e));
       const batches=await api('/import/batches');
       const ENT_TH={order:'ออเดอร์',expenses:'รายจ่าย',cash_transactions:'เงินสด',employees:'พนักงาน',material_purchases:'ค่าสี/วัตถุดิบ'};
       const conflicts=[...new Set((batches||[]).filter(b=>sheetsHere.includes(b.entity)&&b.source!==source).map(b=>b.entity))];
@@ -1213,7 +1219,8 @@ async function importExcel(file){
     }catch(e){}
     const total={inserted:0,updated:0,skipped:0,sheets:0,errors:[]};
     for(const sn of wb.SheetNames){            // ลำดับชีตในไฟล์ = ลำดับ dependency ที่ถูกต้องอยู่แล้ว
-      if(!ENTITIES.includes(sn)) continue;
+      const ent=SHEET_ALIAS[sn]||sn;
+      if(!ENTITIES.includes(ent)) continue;
       const aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,blankrows:false,defval:null});
       if(aoa.length<3) continue;               // แถว1=ไทย, แถว2=field, แถว3+=ข้อมูล
       const keys=aoa[1];
@@ -1225,7 +1232,7 @@ async function importExcel(file){
       for(let off=0; off<rows.length; off+=CHUNK){
         const part=rows.slice(off,off+CHUNK);
         msg.textContent=`กำลังนำเข้า ${sn} (${Math.min(off+CHUNK,rows.length)}/${rows.length} แถว)…`;
-        const r=await fetch('/api/import',{method:'POST',headers:{'Content-Type':'application/json',...authHdr()},body:JSON.stringify({source,entity:sn,rows:part})});
+        const r=await fetch('/api/import',{method:'POST',headers:{'Content-Type':'application/json',...authHdr()},body:JSON.stringify({source,entity:ent,rows:part})});
         const j=await r.json();
         if(j.ok){ total.inserted+=j.data.inserted; total.updated+=j.data.updated; total.skipped+=j.data.skipped; if(j.data.errors&&j.data.errors.length) total.errors.push(...j.data.errors.map(e=>sn+': '+e.error)); }
         else total.errors.push(sn+': '+j.error);
