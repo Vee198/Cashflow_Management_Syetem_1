@@ -251,9 +251,12 @@ let GAME=null;
 function runForecastGame(){
   const sl=document.getElementById('spendSlider'); if(!sl||!GAME) return;
   const mult=+sl.value/100;
+  const inflEl=document.getElementById('inflSlider'); const infl=inflEl?(+inflEl.value/100):0;   // เงินเฟ้อ/ราคาวัตถุดิบขึ้น %
+  const outEff=GAME.outflow*mult*(1+infl);                                                       // ต้นทุนต่อเดือนหลังปรับราคาขึ้น
   let bal=GAME.cash, depletion=null; const series=[];
-  for(let i=0;i<GAME.monthsLeft;i++){ bal += GAME.inflow - GAME.outflow*mult; series.push(Math.round(bal)); if(bal<0&&depletion===null) depletion=GAME.labels[i]; }
-  const yearEnd=bal, monthlyExpense=GAME.outflow*mult, buffer=Math.max(1,monthlyExpense*3);
+  for(let i=0;i<GAME.monthsLeft;i++){ bal += GAME.inflow - outEff; series.push(Math.round(bal)); if(bal<0&&depletion===null) depletion=GAME.labels[i]; }
+  const yearEnd=bal, monthlyExpense=outEff, buffer=Math.max(1,monthlyExpense*3);
+  const inflValEl=document.getElementById('gameInflVal'); if(inflValEl) inflValEl.textContent=(infl*100).toFixed(0)+'%';
   let score=Math.round((yearEnd/buffer)*50+50); score=Math.max(0,Math.min(100,score)); if(depletion) score=Math.min(score,12);
   let emoji,color,verdict;
   if(depletion){ emoji='🔴'; color='var(--red)'; verdict=`สถานะ: วิกฤต — คาดว่ากระแสเงินสดจะติดลบในช่วง <b>${depletion}</b> ควรทบทวนค่าใช้จ่ายและเร่งจัดเก็บลูกหนี้โดยด่วน`; }
@@ -395,6 +398,11 @@ async function tabOverview(){
           <input id="spendSlider" type="range" min="60" max="200" step="5" value="100" oninput="runForecastGame()" style="width:100%;accent-color:var(--accent);margin-top:8px;cursor:pointer">
           <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted)"><span>ลดค่าใช้จ่าย 60%</span><span>ตามจริง 100%</span><span>เพิ่มค่าใช้จ่าย 200%</span></div>
           <div id="gameSpendBaht" style="font-size:13px;margin-top:10px;text-align:center"></div>
+          <div style="margin-top:18px;padding-top:16px;border-top:1px dashed var(--line)">
+            <label style="font-size:13px;color:var(--muted)">📈 สินค้า/วัตถุดิบขึ้นราคา (เงินเฟ้อ): <b id="gameInflVal" style="color:var(--red)">0%</b> <span class="muted">— ลองดูว่าถ้าราคาวัสดุขึ้น ยังอยู่รอดไหม</span></label>
+            <input id="inflSlider" type="range" min="0" max="50" step="1" value="0" oninput="runForecastGame()" style="width:100%;accent-color:#d4694c;margin-top:8px;cursor:pointer">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted)"><span>ไม่ขึ้นราคา 0%</span><span>ขึ้น 25%</span><span>ขึ้น 50%</span></div>
+          </div>
         </div>
         <div class="chartbox" style="height:230px;margin-top:14px;box-shadow:none;border:1px dashed var(--line);padding:10px"><canvas id="gameChart"></canvas></div>
       </div>
@@ -563,6 +571,12 @@ async function tabCost(){
         ${card('ต้นทุนขาย (COGS)','วัตถุดิบ+ค่าแรง+โสหุ้ย', baht(cg.cogs_satang),'', null)}
         ${card('กำไรขั้นต้น','', baht(cg.gross_profit_satang), pct(cg.gross_margin_pct), cg.gross_margin_pct>=30?'green':cg.gross_margin_pct>=15?'yellow':'red')}
       </div>
+      <div class="card" style="margin-top:14px"><h3>ต้นทุนแยกหมวด (จากชีต order: ค่าไม้/สี/แรง/ส่ง) — ต้นทุนรวม ${baht(c.total_satang)}</h3>
+        <table><thead><tr><th>หมวด</th><th>ยอด</th><th>%</th></tr></thead><tbody>
+        ${c.breakdown&&c.breakdown.length?c.breakdown.map(x=>`<tr><td>${x.name}</td><td>${baht(x.satang)}</td><td>${pct(c.total_satang?Math.round(x.satang/c.total_satang*1000)/10:0)}</td></tr>`).join(''):'<tr><td colspan=3 class="muted">ยังไม่มีต้นทุนในชีต order — กรอกคอลัมน์ ค่าไม้/ค่าสี/ค่าแรง/ค่าส่ง (J-M) ในชีต order</td></tr>'}
+        </tbody></table>
+        <div class="muted" style="font-size:12px;margin-top:8px">* นี่คือ <b>ต้นทุนต่อออเดอร์ (job costing)</b> สำหรับดูกำไร/margin รายออเดอร์ — ส่วนกำไรสุทธิ (P&L) ในแท็บภาพรวมใช้ค่าใช้จ่ายจริงจากชีต expenses</div>
+      </div>
     </div>
     <div class="section"><h2>🎨 วิเคราะห์ต้นทุนค่าสี ${tip('โจทย์ที่เจ้าของห่วงว่า "เงินจมกับค่าสี"')}</h2>
       <div class="grid cards">
@@ -571,7 +585,7 @@ async function tabCost(){
         ${card('ค่าสีต่อบาน','เฉลี่ยต่อบานประตู — จับงานที่ผิดปกติ', baht(p.paint_per_door_satang),'', null)}
         ${card('แนวโน้ม','ทิศทางค่าสีรายเดือน', p.trend_direction==='up'?'⬆ เพิ่มขึ้น':p.trend_direction==='down'?'⬇ ลดลง':'➡ คงที่','', p.status)}
       </div>
-      <div class="chartbox" style="margin-top:14px"><canvas id="costPaint"></canvas></div>
+      <div class="muted" style="margin-top:12px;font-size:13px">📊 ดูแนวโน้มค่าสีรายเดือน + เปรียบเทียบช่วงเวลา (YoY) ได้ที่แท็บ <b>"วิเคราะห์ค่าสี"</b></div>
     </div>
     <div class="section"><h2>ค่าใช้จ่ายต่อยอดขาย (รายหมวด)</h2>
       <div class="card"><table><thead><tr><th>หมวด</th><th>ยอด</th><th>% ยอดขาย</th></tr></thead><tbody>
@@ -579,7 +593,6 @@ async function tabCost(){
       </tbody></table></div>
     </div>
   `);
-  mkChart('costPaint',{type:'line',data:{labels:p.trend.map(t=>t.month),datasets:[{label:'ค่าสี (บาท)',data:p.trend.map(t=>t.paint_satang/100),borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.1)',fill:true,tension:.3}]},options:chartOpts('แนวโน้มค่าสีรายเดือน')});
 }
 
 async function tabProduction(){

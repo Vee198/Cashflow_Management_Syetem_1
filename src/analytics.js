@@ -624,6 +624,26 @@ export function apFromExpenses(expenses, asOf) {
   return { ap_outstanding_satang: outstanding, aging, dpo_days: creditTotal ? Math.round(wTerm / creditTotal) : 0, credit_total_satang: creditTotal };
 }
 
+// ต้นทุนรายงาน (Job Costing) — รวมจากคอลัมน์ต้นทุนในชีต order/jobs (cost_wood/paint/labor/shipping)
+// ใช้ในแท็บ "ต้นทุน & ค่าสี" (เลขต้นทุนต่อออเดอร์ที่กรอกในชีต order J-M)
+export function jobCostBreakdown(jobs) {
+  let wood = 0, paint = 0, labor = 0, shipping = 0, total = 0, doors = 0, revenue = 0;
+  for (const j of jobs) {
+    wood += j.cost_wood_satang || 0; paint += j.cost_paint_satang || 0;
+    labor += j.cost_labor_satang || 0; shipping += j.cost_shipping_satang || 0;
+    total += j.total_cost_satang || 0;
+    doors += j.quantity || j.qty_ordered || 0;
+    revenue += j.quoted_price_satang || 0;
+  }
+  if (!total) total = wood + paint + labor + shipping;
+  const breakdown = [
+    { name: 'ค่าไม้', satang: wood }, { name: 'ค่าสี', satang: paint },
+    { name: 'ค่าแรง', satang: labor }, { name: 'ค่าส่ง', satang: shipping },
+  ].filter((x) => x.satang > 0).sort((a, b) => b.satang - a.satang);
+  return { cost_wood_satang: wood, cost_paint_satang: paint, cost_labor_satang: labor, cost_shipping_satang: shipping,
+    total_satang: total, doors, revenue_satang: revenue, breakdown };
+}
+
 // แยกค่าใช้จ่ายคงที่ (fixed) vs ผันแปร (variable) — ตามคอลัมน์ expense_kind
 export function fixedVariable(expenses) {
   let fixed = 0, variable = 0, unset = 0;

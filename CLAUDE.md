@@ -175,7 +175,8 @@ npx wrangler deploy
 - **Financial Score (เต็ม 5):** เฉลี่ยจาก **5 ตัวชี้วัด** — กำไรขั้นต้น(Gross Margin), วงจรเงินสด(**CCC=DSO−DPO** ไม่รวมสต็อก), เงินสำรอง(Runway), ระยะเก็บหนี้(DSO), ระยะจ่ายหนี้(**DPO**) (ฟังก์ชัน `financialScore()` รับ `{gm,runway,dso,dpo}`; gm=`dash.gross_margin_pct`, dpo=`dash.dpo_days`); มีบรรทัดอธิบาย **Runway = เงินสด ÷ เผาเงินสุทธิ/เดือน (จากกระแส 3 ด.ย้อนหลัง)**; แสดงดาว + แถบย่อยรายตัว
 - **พยากรณ์กระแสเงินสด:** การ์ด 13 สัปดาห์ (มีสีสถานะ) + ระยะยาวเลือกช่วง **3/6/9/12/24/36 เดือน** (`renderLongRange()`, `/api/forecast?months=`) แบบ **Base/Best/Worst case**
 - **โครงสร้างต้นทุน:** Pie แยก วัตถุดิบ / สี / ค่าแรงทางตรง (DL) / โสหุ้ย (OH)
-- **Scenario Simulator (gamification):** สไลเดอร์ปรับระดับใช้จ่าย 60–200% → ฉายเงินสดถึงสิ้นปี + ดัชนีสุขภาพการเงิน + คำตัดสินทางการ (🟢แข็งแรง/🟡เฝ้าระวัง/🟠เสี่ยง/🔴วิกฤต) + เตือนเกินงบ — `runForecastGame()` คำนวณฝั่ง client
+- **Scenario Simulator (gamification):** 2 สไลเดอร์ — (1) ระดับใช้จ่าย 60–200% (2) **เงินเฟ้อ/วัตถุดิบขึ้นราคา 0–50%** (`inflSlider`; ต้นทุน/เดือน = outflow×spend×(1+infl)) → ฉายเงินสดถึงสิ้นปี + ดัชนีสุขภาพการเงิน + คำตัดสิน (🟢/🟡/🟠/🔴) — `runForecastGame()` คำนวณฝั่ง client; ใช้ตอบ "ถ้าของขึ้นราคาจะรอดไหม"
+- **แท็บ "ต้นทุน & ค่าสี" (`/api/cost`) ใช้ต้นทุนจากชีต order (J-M):** `A.jobCostBreakdown(jobs)` รวม `jobs.cost_wood/paint/labor/shipping_satang` → ตารางต้นทุนแยกหมวด + gross margin (job costing รายออเดอร์ ไม่ใช่ P&L) — เดิมอ่านจาก `job_costs` (ว่าง) เลยไม่มีเลข; แนวโน้มค่าสีย้ายไปแท็บ "วิเคราะห์ค่าสี"
 - **Wording:** ใช้ภาษาทางการ (ไม่ใช้คำกันเองอย่าง "ย่อยยับ")
 - **PWA (ติดตั้งบนมือถือ iOS/Android):** `public/manifest.webmanifest` + `public/sw.js` (service worker: HTML network-first, static cache-first, /api/* ไม่แคช) + ไอคอน `icon-192/512.png` + meta apple-* ใน `<head>` + ปุ่ม "ติดตั้งแอป" (beforeinstallprompt) ใน header — เสิร์ฟผ่าน Cloudflare assets; **อัปเดต index.html แล้วควรขยับ `CACHE` version ใน sw.js**
 

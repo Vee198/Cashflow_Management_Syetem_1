@@ -281,12 +281,20 @@ app.get('/api/cost', async (c) => {
   try {
     const db = c.env.DB;
     const [jobCosts, jobs, expenses] = await Promise.all([repo.getJobCosts(db), repo.getJobs(db), repo.getExpenses(db)]);
-    const revenue = await repo.getTotalRevenue(db);
-    const cogs = A.cogsBreakdown(jobCosts);
+    // ต้นทุนจากชีต order (J-M: cost_wood/paint/labor/shipping) — เลขต้นทุนต่อออเดอร์
+    const jc = A.jobCostBreakdown(jobs);
+    const revenue = jc.revenue_satang || await repo.getTotalRevenue(db);
+    const paintPctRev = revenue ? Math.round(jc.cost_paint_satang / revenue * 1000) / 10 : 0;
+    const paintPctCogs = jc.total_satang ? Math.round(jc.cost_paint_satang / jc.total_satang * 1000) / 10 : 0;
     return ok(c, {
-      cogs,
-      gross_margin: A.grossMargin(revenue, cogs.total_satang),
-      paint: A.paintAnalysis({ jobCosts, jobs, revenueSatang: revenue }),
+      cogs: { total_satang: jc.total_satang, breakdown: jc.breakdown },
+      gross_margin: A.grossMargin(revenue, jc.total_satang),
+      paint: {
+        paint_pct_of_revenue: paintPctRev, paint_pct_of_cogs: paintPctCogs,
+        paint_per_door_satang: jc.doors ? Math.round(jc.cost_paint_satang / jc.doors) : 0,
+        paint_total_satang: jc.cost_paint_satang, trend: [], trend_direction: 'flat',
+        status: paintPctRev > 25 ? 'red' : paintPctRev > 15 ? 'yellow' : 'green',
+      },
       expense_to_sales: A.expenseToSales(expenses, revenue),
       job_profitability: A.jobProfitability(jobs, jobCosts),
     });
