@@ -171,17 +171,19 @@ app.get('/api/dashboard', async (c) => {
     const overheadExp = eb.buckets.marketing + eb.buckets.ads + eb.buckets.rent + eb.buckets.overhead;
     let mpAll = 0, mpPaint = 0;
     for (const p of purF) { mpAll += p.total_incl_vat_satang || 0; if (p.category === 'paint') mpPaint += p.total_incl_vat_satang || 0; }
-    const prodCost = jobsCost + eb.buckets.production + mpAll;            // COGS = ออเดอร์ + รายจ่ายผลิต + วัตถุดิบที่ซื้อ
-    const paintCost = jobsPaint + (eb.by_category.paint || 0) + mpPaint;
+    const xb = eb.by_category;
+    // ── COGS (P&L) = ต้นทุนวัสดุ/ผลิต "ที่จ่ายจริง" จาก expenses + material_purchases เท่านั้น ──
+    //    ต้นทุนในชีต order (J-M: jobsCost/jobsPaint/jw/jl/jsh) ใช้สำหรับวิเคราะห์กำไรรายออเดอร์ (margin tab) เท่านั้น
+    //    *ไม่บวกซ้ำใน P&L* เพื่อเลี่ยงการนับต้นทุน 2-3 รอบ (เคยทำกำไรสุทธิติดลบเทียม)
+    const prodCost = eb.buckets.production + mpAll;                        // COGS = รายจ่ายหมวดผลิต + วัตถุดิบที่ซื้อ
+    const paintCost = (xb.paint || 0) + mpPaint;
     const buckets = { production: prodCost, marketing: eb.buckets.marketing, ads: eb.buckets.ads, rent: eb.buckets.rent, overhead: eb.buckets.overhead };
     const ps = A.profitByProductionType(jobF);
     const jobsRevenue = ps.self.revenue + ps.outsourced.revenue;
-    const xb = eb.by_category;
     const cogs_breakdown = [
       { name: 'ค่าสี', satang: paintCost },
-      { name: 'ค่าไม้', satang: jw + (xb.wood || 0) },
-      { name: 'ค่าแรง', satang: jl + (xb.labor || 0) },
-      { name: 'ค่าส่ง', satang: jsh },
+      { name: 'ค่าไม้', satang: (xb.wood || 0) },
+      { name: 'ค่าแรง', satang: (xb.labor || 0) + (xb.salary || 0) },
       { name: 'วัตถุดิบอื่น/ฮาร์ดแวร์', satang: (mpAll - mpPaint) + (xb.hardware || 0) },
     ].filter((x) => x.satang > 0).sort((a, b) => b.satang - a.satang);
     const oh_breakdown = [
@@ -201,12 +203,15 @@ app.get('/api/dashboard', async (c) => {
       jobs_revenue_satang: jobsRevenue,
       production_cost_satang: prodCost,
       paint_cost_satang: paintCost,
-      net_profit_satang: ps.total_profit - overheadExp - eb.buckets.production - mpAll,
+      gross_profit_satang: jobsRevenue - prodCost,                              // กำไรขั้นต้น = ยอดขาย − COGS
+      gross_margin_pct: jobsRevenue ? Math.round((jobsRevenue - prodCost) / jobsRevenue * 1000) / 10 : 0,
+      net_profit_satang: jobsRevenue - prodCost - overheadExp,                   // กำไรสุทธิ = ยอดขาย − COGS − OH
       cogs_total_satang: prodCost, cogs_breakdown,
       oh_total_satang: overheadExp, oh_breakdown,
       runway: A.burnAndRunway(cashTxns, asOf, 3),
       expense_buckets: { buckets, by_category: eb.by_category, total_satang: prodCost + overheadExp },
       ar_by_customer: A.arByCustomer(invF, customers, asOf),
+      ar_aging: A.arAgingByIssue(invF, asOf),
       sales_monthly: A.salesMonthly(invF, budgets),
       production_split: ps,
     });

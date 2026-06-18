@@ -41,7 +41,8 @@
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:var(--font);background:var(--bg);background-image:var(--bg-grad);background-attachment:fixed;color:var(--text);font-size:15px}
-  header{background:linear-gradient(135deg,#5a9d77 0%,#74ad8d 55%,#83b89c 100%);border-bottom:3px solid var(--gold);padding:14px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:10;box-shadow:0 3px 16px rgba(90,157,119,.25);color:#ffffff}
+  #topbar{position:sticky;top:0;z-index:30}
+  header{background:linear-gradient(135deg,#5a9d77 0%,#74ad8d 55%,#83b89c 100%);border-bottom:3px solid var(--gold);padding:14px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;box-shadow:0 3px 16px rgba(90,157,119,.25);color:#ffffff}
   header h1{font-size:20px;margin:0;font-weight:700;color:#fff;letter-spacing:.3px;text-shadow:0 1px 2px rgba(40,70,50,.18)}
   header .sub{color:#eef7ef;font-size:12.5px;letter-spacing:.2px}
   header .muted{color:#e6f2e7 !important}
@@ -51,7 +52,7 @@
   .toggle{display:flex;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.34);border-radius:9px;overflow:hidden}
   .toggle button{background:none;border:none;color:#e6efe6;padding:6px 14px;cursor:pointer;font-family:var(--font);font-size:14px}
   .toggle button.active{background:var(--gold);color:#2a2410;font-weight:700}
-  nav{display:flex;gap:6px;padding:12px 20px;background:rgba(255,253,249,.85);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);overflow-x:auto;flex-wrap:wrap}
+  nav{display:flex;gap:6px;padding:12px 20px;background:#fdfbf4;border-bottom:1px solid var(--line);box-shadow:0 4px 10px rgba(90,157,119,.08);overflow-x:auto;flex-wrap:wrap}
   nav button{background:var(--panel);border:1px solid var(--line);color:var(--muted);padding:8px 15px;border-radius:9px;cursor:pointer;font-family:var(--font);font-size:14px;white-space:nowrap;transition:all .15s}
   nav button:hover{border-color:var(--accent);color:var(--accent)}
   nav button.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;box-shadow:0 2px 8px rgba(47,107,76,.3)}
@@ -122,6 +123,7 @@
     <div id="loginErr" style="color:var(--red);font-size:13px;text-align:center;margin-top:10px;min-height:18px"></div>
   </div>
 </div>
+<div id="topbar">
 <header>
   <img src="https://cdn.phototourl.com/free/2026-06-04-4bf268f0-68d4-4ac1-9558-6fe8362f128c.jpg" alt="WAYTHAI-FORYOU" onerror="this.style.display='none'" style="height:44px;width:44px;border-radius:10px;object-fit:cover;border:1px solid rgba(255,255,255,.35);box-shadow:0 2px 8px rgba(0,0,0,.2)">
   <div>
@@ -148,6 +150,7 @@
 </header>
 
 <nav id="nav"></nav>
+</div>
 <main id="main"><div class="loading">กำลังโหลด…</div></main>
 
 <script>
@@ -332,7 +335,8 @@ async function tabOverview(){
         ${card('เงินสดในมือ','เงินจริงๆ ในบัญชี/เงินสด (รวมทุกบัญชี)', baht(dash.cash_on_hand_satang),'ยอดคงเหลือจริง', dash.cash_on_hand_satang>0?'green':'red')}
         ${card('ยอดรับเข้าแล้ว','เงินที่ลูกค้าจ่ายมาแล้วจริง (มัดจำ + ชำระ)', baht(dash.received_satang),'จากยอดบิลรวม '+baht(dash.billed_revenue_satang), 'green')}
         ${card('ยอดค้างรับ','เงินที่ลูกค้ายังค้างจ่าย — ดูรายลูกค้าด้านล่าง', baht(dash.outstanding_satang),'รวมที่ยังไม่ได้รับ', dash.outstanding_satang>0?'yellow':'green')}
-        ${card('กำไรสุทธิ','ยอดขาย − ค่าใช้จ่ายทั้งหมด', baht(dash.net_profit_satang), 'อัตรากำไรสุทธิ '+pct(netMarginPct), dash.net_profit_satang>0?'green':'red')}
+        ${card('กำไรขั้นต้น (Gross)','ยอดขาย − ต้นทุนขาย (COGS) เท่านั้น', baht(dash.gross_profit_satang), 'อัตรากำไรขั้นต้น '+pct(dash.gross_margin_pct), dash.gross_profit_satang>0?'green':'red')}
+        ${card('กำไรสุทธิ (Net)','ขั้นต้น − ค่าใช้จ่ายดำเนินงาน (OH)', baht(dash.net_profit_satang), 'อัตรากำไรสุทธิ '+pct(netMarginPct), dash.net_profit_satang>0?'green':'red')}
         ${card('เงินสำรอง (Runway)','เงินสดจะอยู่ได้อีกกี่เดือน', runwayTxt, flowNote(r.net_burn_satang)+' '+pill(r.status), r.status)}
         ${card('ต้นทุนค่าสี','ค่าสีคิดเป็นกี่ % ของยอดขาย (จากรายจ่าย)', pct(paintPctRev), 'ค่าสีรวม '+baht(paintExp), paintPctRev>25?'red':paintPctRev>15?'yellow':'green')}
       </div>
@@ -405,10 +409,14 @@ async function tabOverview(){
       ${ps.monthly.length?'<div class="chartbox" style="margin-top:14px"><canvas id="prodSplitChart"></canvas></div>':''}
     </div>
 
-    <div class="section"><h2>ยอดค้างรับรายลูกค้า ${tip('ลูกค้ารายไหนค้างจ่ายเท่าไร — คอลัมน์เลยกำหนด (แดง) = เลยวันครบกำหนดชำระแล้ว')}</h2>
-      <div class="card"><div style="overflow:auto"><table><thead><tr><th>ลูกค้า</th><th>เบอร์โทร</th><th>ยอดค้างรับ</th><th>เลยกำหนด</th></tr></thead><tbody>
-      ${dash.ar_by_customer.length?dash.ar_by_customer.map(x=>`<tr><td>${x.customer}</td><td>${x.phone||'-'}</td><td>${baht(x.outstanding_satang)}</td><td style="${x.overdue_satang>0?'color:var(--red);font-weight:600':''}">${x.overdue_satang>0?baht(x.overdue_satang):'-'}</td></tr>`).join(''):'<tr><td colspan=4 class="muted">ไม่มียอดค้างรับ 🎉</td></tr>'}
+    <div class="section"><h2>ยอดค้างรับรายลูกค้า ${tip('วันที่รับงาน = ออเดอร์เก่าสุดที่ยังค้าง · จำนวนวันค้าง = วันนี้ − วันที่รับงาน · เลยกำหนด (แดง) = เลยวันครบกำหนดชำระแล้ว')}</h2>
+      <div class="card"><div style="overflow:auto"><table><thead><tr><th>ลูกค้า</th><th>เบอร์โทร</th><th>วันที่รับงาน</th><th>จำนวนวันค้าง</th><th>ยอดค้างรับ</th><th>เลยกำหนด</th></tr></thead><tbody>
+      ${dash.ar_by_customer.length?dash.ar_by_customer.map(x=>{const dcol=x.days_outstanding==null?'':(x.days_outstanding>60?'color:var(--red);font-weight:600':x.days_outstanding>30?'color:var(--gold);font-weight:600':'');return `<tr><td>${x.customer}</td><td>${x.phone||'-'}</td><td>${x.first_issue_date||'-'}</td><td style="${dcol}">${x.days_outstanding!=null?x.days_outstanding+' วัน':'-'}</td><td>${baht(x.outstanding_satang)}</td><td style="${x.overdue_satang>0?'color:var(--red);font-weight:600':''}">${x.overdue_satang>0?baht(x.overdue_satang):'-'}</td></tr>`}).join(''):'<tr><td colspan=6 class="muted">ไม่มียอดค้างรับ 🎉</td></tr>'}
       </tbody></table></div></div>
+    </div>
+
+    <div class="section"><h2>AR Aging — อายุยอดค้างรับ ${tip('แยกยอดค้างรับตามอายุ (นับจากวันที่รับงาน) ยิ่งอายุมาก ยิ่งเสี่ยงเก็บไม่ได้ — ควรเร่งตามช่วง 90 วัน+')}</h2>
+      <div class="card"><div class="chartbox" style="box-shadow:none;border:none;padding:0"><canvas id="arAgingChart"></canvas></div></div>
     </div>
 
     <div class="section"><h2>ยอดขาย & ค่าใช้จ่าย ${tip('ยอดขายรายเดือน (จริง) + ค่าใช้จ่ายแยกหมวดธุรกิจ')}</h2>
@@ -420,11 +428,19 @@ async function tabOverview(){
 
     <div class="section"><h2>สรุปต้นทุน (COGS) &amp; ค่าใช้จ่ายดำเนินงาน (OH) ${tip('COGS = ต้นทุนผลิตทั้งหมด (ไม้/สี/แรง/ส่ง/วัตถุดิบที่ซื้อ) · OH = ค่าใช้จ่ายดำเนินงาน (เช่า/น้ำไฟ/การตลาด/Ads/ขนส่ง/อื่นๆ)')}</h2>
       <div class="row">
-        <div class="card card-neutral" style="flex:1;min-width:300px"><h3>💰 ต้นทุนขาย (COGS) รวม <span style="color:var(--accent-d);font-family:var(--serif)">${baht(dash.cogs_total_satang)}</span></h3>
+        <div class="card card-neutral" style="flex:1;min-width:300px">
+          <div style="background:linear-gradient(135deg,#d4694c 0%,#c25a3f 100%);color:#fff;border-radius:12px;padding:14px 18px;margin-bottom:12px;box-shadow:0 3px 12px rgba(212,105,76,.3)">
+            <div style="font-size:13px;opacity:.92">💰 ต้นทุนขาย (COGS) รวม</div>
+            <div style="font-size:32px;font-weight:800;font-family:var(--serif);line-height:1.2">${baht(dash.cogs_total_satang)}</div>
+          </div>
           <table><thead><tr><th>หมวดย่อย</th><th>จำนวนเงิน</th><th>%</th></tr></thead><tbody>
           ${dash.cogs_breakdown.length?dash.cogs_breakdown.map(x=>`<tr><td>${x.name}</td><td>${baht(x.satang)}</td><td>${pct(dash.cogs_total_satang?Math.round(x.satang/dash.cogs_total_satang*1000)/10:0)}</td></tr>`).join(''):'<tr><td colspan=3 class="muted">ยังไม่มีข้อมูลต้นทุน</td></tr>'}
           </tbody></table></div>
-        <div class="card card-neutral" style="flex:1;min-width:300px"><h3>🏢 ค่าใช้จ่ายดำเนินงาน (OH) รวม <span style="color:var(--wood-d);font-family:var(--serif)">${baht(dash.oh_total_satang)}</span></h3>
+        <div class="card card-neutral" style="flex:1;min-width:300px">
+          <div style="background:linear-gradient(135deg,#9a6a43 0%,#84592f 100%);color:#fff;border-radius:12px;padding:14px 18px;margin-bottom:12px;box-shadow:0 3px 12px rgba(154,106,67,.3)">
+            <div style="font-size:13px;opacity:.92">🏢 ค่าใช้จ่ายดำเนินงาน (OH) รวม</div>
+            <div style="font-size:32px;font-weight:800;font-family:var(--serif);line-height:1.2">${baht(dash.oh_total_satang)}</div>
+          </div>
           <table><thead><tr><th>หมวดย่อย</th><th>จำนวนเงิน</th><th>%</th></tr></thead><tbody>
           ${dash.oh_breakdown.length?dash.oh_breakdown.map(x=>`<tr><td>${x.name}</td><td>${baht(x.satang)}</td><td>${pct(dash.oh_total_satang?Math.round(x.satang/dash.oh_total_satang*1000)/10:0)}</td></tr>`).join(''):'<tr><td colspan=3 class="muted">ยังไม่มีค่าใช้จ่าย OH</td></tr>'}
           </tbody></table></div>
@@ -438,6 +454,10 @@ async function tabOverview(){
       </tbody></table></div>
     </div>
   `);
+  const ara=dash.ar_aging||{d0_30:0,d31_60:0,d61_90:0,d90p:0};
+  mkChart('arAgingChart',{type:'bar',data:{labels:['0-30 วัน','31-60 วัน','61-90 วัน','90 วัน+'],datasets:[
+    {label:'ยอดค้างรับ',data:[ara.d0_30,ara.d31_60,ara.d61_90,ara.d90p].map(v=>v/100),backgroundColor:['#5a9d77','#c9aa63','#d98a4c','#d4694c']}
+  ]},options:chartOpts('มูลค่ายอดค้างรับแยกตามอายุหนี้ (บาท)')});
   const sm=dash.sales_monthly;
   mkChart('salesMonthly',{type:'bar',data:{labels:sm.map(x=>x.month),datasets:[
     {label:'ยอดขายจริง',data:sm.map(x=>x.actual_satang/100),backgroundColor:'#5a9d77'}

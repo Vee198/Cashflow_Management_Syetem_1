@@ -326,7 +326,9 @@
 - **เงินสดในมือ** = ยอดสุทธิจาก cash_transactions · **ยอดรับเข้าแล้ว** = Σ amount_paid ของใบแจ้งหนี้ · **ยอดค้างรับ** = ยอดบิล − รับแล้ว
 - **ต้นทุนผลิต + ค่าสี** = ออเดอร์ (`jobs.total_cost`/`cost_paint`) **+ วัตถุดิบที่ซื้อ** (รายจ่ายหมวด paint/wood/hardware/labor); **ค่าใช้จ่ายอื่น** (OH/ตลาด/Ads/เช่า) จากชีตรายจ่าย
   - รองรับ 2 สไตล์: ใส่ต้นทุนในออเดอร์ **หรือ** บันทึกการซื้อวัตถุดิบเป็นรายจ่าย (อย่าใส่ซ้ำทั้งสองทางสำหรับของชิ้นเดียวกัน)
-- **กำไรสุทธิ** = กำไรงาน (ผลิตเอง+สั่งซัพ) − ค่าใช้จ่ายอื่น; **ค่าสี%** และ **net margin** อิงรายได้จากงาน (`jobs_revenue`)
+- **โมเดลต้นทุน (สำคัญ — เลิกนับซ้ำ):** **COGS = ค่าวัสดุ/ผลิตที่จ่ายจริง** จาก `expenses` (หมวด paint/wood/hardware/labor/salary) + `material_purchases` เท่านั้น; **ต้นทุนในชีต order (J-M: cost_wood/paint/labor/shipping) ใช้วิเคราะห์กำไรรายออเดอร์ (margin) เท่านั้น ไม่บวกเข้า P&L** (เดิมบวกซ้ำ → กำไรสุทธิติดลบเทียม)
+- **กำไรขั้นต้น (Gross) = ยอดขาย − COGS**; **กำไรสุทธิ (Net) = ขั้นต้น − OH**; `gross_profit_satang`/`gross_margin_pct` + `net_profit_satang` ใน `/api/dashboard` — แสดง 2 การ์ดแยกในภาพรวมให้เห็นว่า "บวมที่ COGS หรือ OH"
+- **AR Aging / ยอดค้างรับ:** `ar_by_customer` เพิ่ม `first_issue_date` (วันรับงานเก่าสุดที่ค้าง) + `days_outstanding` (วันนี้−วันรับงาน); `ar_aging` (`A.arAgingByIssue`) แยกมูลค่าค้างเป็น 0-30/31-60/61-90/90+ วัน → bar chart
 - **arByCustomer** = ยอดค้างรับรายลูกค้า + ยอดเลยกำหนด (overdue)
 - **expenseBuckets** = จัดค่าใช้จ่ายเป็น ต้นทุนผลิต(paint/wood/hardware/labor) / การตลาด(marketing) / Ads / ค่าเช่า(rent) / โสหุ้ย(utility,overhead,transport,other)
 - **salesMonthly** = ยอดขายรายเดือน (จริง/invoiced) — หน้า Overview แสดงเฉพาะยอดจริง (ฟังก์ชันยังคืน budget ไว้เผื่อใช้ภายหลัง)

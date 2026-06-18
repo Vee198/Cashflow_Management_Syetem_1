@@ -554,13 +554,35 @@ export function arByCustomer(invoices, customers, asOf) {
   for (const i of invoices) {
     const out = i.amount_satang - (i.amount_paid_satang || 0);
     if (out <= 0 || i.status === 'paid' || i.status === 'void') continue;
-    if (!m[i.customer_id]) m[i.customer_id] = { outstanding: 0, overdue: 0 };
+    if (!m[i.customer_id]) m[i.customer_id] = { outstanding: 0, overdue: 0, first_issue: null };
     m[i.customer_id].outstanding += out;
     if (asOf && new Date(i.due_date) < new Date(asOf)) m[i.customer_id].overdue += out;
+    // วันที่รับงานเก่าสุดที่ยังค้าง (ใช้คำนวณจำนวนวันที่ค้างมาแล้ว)
+    if (i.issue_date && (!m[i.customer_id].first_issue || i.issue_date < m[i.customer_id].first_issue)) m[i.customer_id].first_issue = i.issue_date;
   }
+  const today = asOf ? new Date(asOf) : null;
   return Object.entries(m)
-    .map(([id, v]) => ({ customer: nameById[id] || ('#' + id), phone: phoneById[id] || '', outstanding_satang: v.outstanding, overdue_satang: v.overdue }))
+    .map(([id, v]) => ({
+      customer: nameById[id] || ('#' + id), phone: phoneById[id] || '',
+      outstanding_satang: v.outstanding, overdue_satang: v.overdue,
+      first_issue_date: v.first_issue,
+      days_outstanding: (today && v.first_issue) ? Math.max(0, Math.floor((today - new Date(v.first_issue)) / 86400000)) : null,
+    }))
     .sort((a, b) => b.outstanding_satang - a.outstanding_satang);
+}
+
+// AR Aging — แยกยอดค้างรับตามอายุ (นับจากวันที่รับงาน issue_date) เป็นช่วง 0-30 / 31-60 / 61-90 / 90+
+export function arAgingByIssue(invoices, asOf) {
+  const b = { d0_30: 0, d31_60: 0, d61_90: 0, d90p: 0 };
+  const now = asOf ? new Date(asOf) : new Date();
+  for (const i of invoices) {
+    const out = i.amount_satang - (i.amount_paid_satang || 0);
+    if (out <= 0 || i.status === 'paid' || i.status === 'void') continue;
+    const base = i.issue_date || i.due_date; if (!base) continue;
+    const days = Math.floor((now - new Date(base)) / 86400000);
+    if (days <= 30) b.d0_30 += out; else if (days <= 60) b.d31_60 += out; else if (days <= 90) b.d61_90 += out; else b.d90p += out;
+  }
+  return b;
 }
 
 // ค่าใช้จ่ายแยกหมวดธุรกิจ: ต้นทุนผลิต / การตลาด / Ads / ค่าเช่า / โสหุ้ย
