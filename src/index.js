@@ -151,8 +151,8 @@ app.get('/api/dashboard', async (c) => {
   try {
     const db = c.env.DB;
     const asOf = asOfOf(c);
-    const [cashTxns, invoices, expenses, customers, budgets, jobs, purchases] = await Promise.all([
-      repo.getCashTxns(db), repo.getInvoices(db), repo.getExpenses(db), repo.getCustomers(db), repo.getBudgets(db), repo.getJobs(db), repo.getMaterialPurchases(db),
+    const [cashTxns, invoices, expenses, customers, budgets, jobs, purchases, employees] = await Promise.all([
+      repo.getCashTxns(db), repo.getInvoices(db), repo.getExpenses(db), repo.getCustomers(db), repo.getBudgets(db), repo.getJobs(db), repo.getMaterialPurchases(db), repo.getEmployees(db),
     ]);
     const cash = A.cashOnHand(cashTxns).total_satang;
     // ── ตัวกรองช่วงวันที่ (from–to) กรองข้อมูลเชิงงวด (ยอดขาย/ต้นทุน/ค่าสี/กำไร); เงินสดในมือ = ยอดคงเหลือปัจจุบัน ไม่กรอง ──
@@ -175,18 +175,28 @@ app.get('/api/dashboard', async (c) => {
     // ── COGS (P&L) = ต้นทุนวัสดุ/ผลิต "ที่จ่ายจริง" จาก expenses + material_purchases เท่านั้น ──
     //    ต้นทุนในชีต order (J-M: jobsCost/jobsPaint/jw/jl/jsh) ใช้สำหรับวิเคราะห์กำไรรายออเดอร์ (margin tab) เท่านั้น
     //    *ไม่บวกซ้ำใน P&L* เพื่อเลี่ยงการนับต้นทุน 2-3 รอบ (เคยทำกำไรสุทธิติดลบเทียม)
-    const prodCost = eb.buckets.production + mpAll;                        // COGS = รายจ่ายหมวดผลิต + วัตถุดิบที่ซื้อ
+    // เงินเดือนพนักงาน (auto จาก employees) × จำนวนเดือนที่มีข้อมูลในช่วง — ฝ่ายผลิต→COGS, อื่นๆ→OH
+    const monthsSet = new Set();
+    for (const j of jobF) { const k = (j.started_at || '').slice(0, 7); if (k) monthsSet.add(k); }
+    for (const e of expF) { const k = (e.spent_at || '').slice(0, 7); if (k) monthsSet.add(k); }
+    const monthsCount = monthsSet.size || 1;
+    const sal = A.employeeSalary(employees);
+    const salCogs = sal.cogs * monthsCount, salOh = sal.oh * monthsCount;
+    const prodCost = eb.buckets.production + mpAll + salCogs;              // COGS = รายจ่ายหมวดผลิต + วัตถุดิบ + เงินเดือนฝ่ายผลิต
     const paintCost = (xb.paint || 0) + mpPaint;
     const buckets = { production: prodCost, marketing: eb.buckets.marketing, ads: eb.buckets.ads, rent: eb.buckets.rent, overhead: eb.buckets.overhead };
     const ps = A.profitByProductionType(jobF);
     const jobsRevenue = ps.self.revenue + ps.outsourced.revenue;
+    const ohTotal = overheadExp + salOh;                                  // OH รวมเงินเดือนสนง./บริหาร
     const cogs_breakdown = [
       { name: 'ค่าสี', satang: paintCost },
       { name: 'ค่าไม้', satang: (xb.wood || 0) },
-      { name: 'ค่าแรง', satang: (xb.labor || 0) + (xb.salary || 0) },
+      { name: 'ค่าแรง', satang: (xb.labor || 0) },
+      { name: 'เงินเดือน (ฝ่ายผลิต)', satang: salCogs + (xb.salary || 0) },
       { name: 'วัตถุดิบอื่น/ฮาร์ดแวร์', satang: (mpAll - mpPaint) + (xb.hardware || 0) },
     ].filter((x) => x.satang > 0).sort((a, b) => b.satang - a.satang);
     const oh_breakdown = [
+      { name: 'เงินเดือน (สนง./บริหาร)', satang: salOh },
       { name: 'ค่าเช่า', satang: xb.rent || 0 },
       { name: 'ค่าน้ำ-ไฟ', satang: xb.utility || 0 },
       { name: 'การตลาด', satang: xb.marketing || 0 },
@@ -205,11 +215,11 @@ app.get('/api/dashboard', async (c) => {
       paint_cost_satang: paintCost,
       gross_profit_satang: jobsRevenue - prodCost,                              // กำไรขั้นต้น = ยอดขาย − COGS
       gross_margin_pct: jobsRevenue ? Math.round((jobsRevenue - prodCost) / jobsRevenue * 1000) / 10 : 0,
-      net_profit_satang: jobsRevenue - prodCost - overheadExp,                   // กำไรสุทธิ = ยอดขาย − COGS − OH
+      net_profit_satang: jobsRevenue - prodCost - ohTotal,                       // กำไรสุทธิ = ยอดขาย − COGS − OH (รวมเงินเดือน)
       cogs_total_satang: prodCost, cogs_breakdown,
-      oh_total_satang: overheadExp, oh_breakdown,
+      oh_total_satang: ohTotal, oh_breakdown,
       runway: A.burnAndRunway(cashTxns, asOf, 3),
-      expense_buckets: { buckets, by_category: eb.by_category, total_satang: prodCost + overheadExp },
+      expense_buckets: { buckets, by_category: eb.by_category, total_satang: prodCost + ohTotal },
       ar_by_customer: A.arByCustomer(invF, customers, asOf),
       ar_aging: A.arAging(invF, asOf),   // อิง "เลยกำหนด" (overdue จาก due_date) ให้สอดคล้องกับตาราง
       ap_summary: A.apFromExpenses(expF, asOf),
@@ -251,11 +261,11 @@ app.get('/api/paint-analysis', async (c) => {
 // ---------- งบกำไรขาดทุนรายเดือน (P&L) ----------
 app.get('/api/pnl', async (c) => {
   try {
-    const [jobs, expenses] = await Promise.all([repo.getJobs(c.env.DB), repo.getExpenses(c.env.DB)]);
+    const [jobs, expenses, employees] = await Promise.all([repo.getJobs(c.env.DB), repo.getExpenses(c.env.DB), repo.getEmployees(c.env.DB)]);
     return ok(c, {
-      monthly: A.pnlMonthly(jobs, expenses),
+      monthly: A.pnlMonthly(jobs, expenses, employees),
       cogs_cats: ['paint', 'wood', 'hardware', 'labor', 'salary'],
-      oh_cats: ['rent', 'utility', 'marketing', 'ads', 'transport', 'overhead', 'other'],
+      oh_cats: ['rent', 'utility', 'marketing', 'ads', 'transport', 'overhead', 'other', 'salary_oh'],
     });
   } catch (e) { return err(c, e, 500); }
 });

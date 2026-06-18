@@ -564,9 +564,9 @@ async function tabAging(){
 }
 
 // ── งบกำไรขาดทุน (P&L) — เลือก 2 งวด (multi-เดือน) + vertical/horizontal + พิมพ์/CSV ──
-const PNL_CATLBL={paint:'ค่าสี',wood:'ค่าไม้',hardware:'ฮาร์ดแวร์/วัตถุดิบ',labor:'ค่าแรงผลิต',salary:'เงินเดือน',rent:'ค่าเช่า',utility:'ค่าน้ำ-ไฟ',marketing:'การตลาด',ads:'โฆษณา (Ads)',transport:'ค่าขนส่ง',overhead:'โสหุ้ย',other:'อื่นๆ'};
+const PNL_CATLBL={paint:'ค่าสี',wood:'ค่าไม้',hardware:'ฮาร์ดแวร์/วัตถุดิบ',labor:'ค่าแรงผลิต',salary:'เงินเดือน (ฝ่ายผลิต)',salary_oh:'เงินเดือน (สนง./บริหาร)',rent:'ค่าเช่า',utility:'ค่าน้ำ-ไฟ',marketing:'การตลาด',ads:'โฆษณา (Ads)',transport:'ค่าขนส่ง',overhead:'โสหุ้ย',other:'อื่นๆ'};
 const PNL_COGS=['paint','wood','hardware','labor','salary'];
-const PNL_OH=['rent','utility','marketing','ads','transport','overhead','other'];
+const PNL_OH=['salary_oh','rent','utility','marketing','ads','transport','overhead','other'];
 function pnlRangeAgg(monthly,from,to){
   const r={revenue:0,cats:{}};
   for(const m of monthly){ if(m.month>=from&&m.month<=to){ r.revenue+=m.revenue; for(const k in m.cats) r.cats[k]=(r.cats[k]||0)+m.cats[k]; } }

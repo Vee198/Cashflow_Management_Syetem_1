@@ -644,13 +644,30 @@ export function jobCostBreakdown(jobs) {
     total_satang: total, doors, revenue_satang: revenue, breakdown };
 }
 
+// เงินเดือนพนักงานต่อเดือน (ดึงจากชีต employees อัตโนมัติ) — แยกฝ่ายผลิต(เข้า COGS) vs สนง./บริหาร(เข้า OH)
+export function employeeSalary(employees) {
+  let cogs = 0, oh = 0;
+  for (const e of employees || []) {
+    if (e.status && e.status !== 'active') continue;
+    const sal = e.base_salary_satang || 0;
+    if ((e.department || '') === 'production') cogs += sal; else oh += sal;
+  }
+  return { cogs, oh, per_month: cogs + oh };
+}
+
 // งบกำไรขาดทุนรายเดือน (สำหรับแท็บ P&L) — รายได้จาก jobs(quoted, ตาม started_at), ต้นทุน/ค่าใช้จ่ายจาก expenses(ตาม spent_at)
+// + เงินเดือนพนักงาน (auto จาก employees) เข้าทุกเดือนที่มีข้อมูล: ฝ่ายผลิต→cats.salary(COGS), อื่นๆ→cats.salary_oh(OH)
 // คืน category ดิบรายเดือน ให้ frontend รวมช่วง + แยก COGS/OH + คำนวณ vertical/horizontal เอง
-export function pnlMonthly(jobs, expenses) {
+export function pnlMonthly(jobs, expenses, employees) {
   const m = {};
   const ens = (k) => { if (!m[k]) m[k] = { revenue: 0, cats: {} }; return m[k]; };
   for (const j of jobs) { const k = ym(j.started_at); if (k) ens(k).revenue += j.quoted_price_satang || 0; }
   for (const e of expenses) { const k = ym(e.spent_at); if (!k) continue; const o = ens(k); o.cats[e.category] = (o.cats[e.category] || 0) + (e.amount_satang || 0); }
+  const sal = employeeSalary(employees);
+  if (sal.per_month > 0) for (const k of Object.keys(m)) {
+    if (sal.cogs) m[k].cats.salary = (m[k].cats.salary || 0) + sal.cogs;
+    if (sal.oh) m[k].cats.salary_oh = (m[k].cats.salary_oh || 0) + sal.oh;
+  }
   return Object.keys(m).sort().map((k) => ({ month: k, revenue: m[k].revenue, cats: m[k].cats }));
 }
 
