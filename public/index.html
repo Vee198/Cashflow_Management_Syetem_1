@@ -276,13 +276,13 @@ let FCHORIZON=12;
 function stars(s){const f=Math.round(s);return '★'.repeat(Math.max(0,Math.min(5,f)))+'☆'.repeat(Math.max(0,5-f));}
 function financialScore(o){
   const cl=v=>Math.max(0,Math.min(1,v));
+  const ccc=(o.dso||0)-(o.dpo||0);           // วงจรเงินสด (AR−AP) — ไม่รวมสต็อก (ไม่เน้นสต็อก)
   const parts=[
     {k:'กำไรขั้นต้น (Gross Margin)', s:cl(o.gm/30), val:o.gm.toFixed(1)+'%'},
-    {k:'สภาพคล่อง (Current Ratio)', s:cl(o.cr/2), val:o.cr.toFixed(2)},
-    {k:'สินค้าคงคลัง (DIO)', s:cl((120-o.dio)/90), val:o.dio.toFixed(0)+' วัน'},
-    {k:'วงจรเงินสด (CCC)', s:cl((90-o.ccc)/90), val:o.ccc.toFixed(0)+' วัน'},
+    {k:'วงจรเงินสด (CCC = DSO−DPO)', s:cl((60-ccc)/90), val:ccc.toFixed(0)+' วัน'},
     {k:'เงินสำรอง (Runway)', s:o.runway==null?1:cl(o.runway/12), val:o.runway==null?'กระแสบวก':o.runway+' ด.'},
     {k:'ระยะเก็บหนี้ (DSO)', s:cl((90-o.dso)/60), val:o.dso.toFixed(0)+' วัน'},
+    {k:'ระยะจ่ายหนี้ (DPO)', s:cl(o.dpo/45), val:(o.dpo||0).toFixed(0)+' วัน'},
   ];
   const avg=parts.reduce((a,b)=>a+b.s,0)/parts.length, score5=Math.round(avg*50)/10;
   return {score5, parts, status:score5>=3.75?'green':score5>=2.5?'yellow':'red'};
@@ -317,7 +317,7 @@ async function tabOverview(){
   const paintPctRev = revBase? Math.round(paintExp/revBase*1000)/10 : 0;
   const runwayTxt = r.runway_months==null ? 'กระแสบวก' : r.runway_months+' เดือน';
   const w=fc.thirteen_week, lr=fc.long_range, firstNeg=w.first_negative_week;
-  const fs=financialScore({gm:netMarginPct,cr:l.current_ratio,dio:c.dio,ccc:c.ccc,runway:r.runway_months,dso:c.dso});
+  const fs=financialScore({gm:(dash.gross_margin_pct||0),runway:r.runway_months,dso:c.dso,dpo:(dash.dpo_days||0)});
   const dd=new Date(state.asOf), yr=dd.getFullYear(); const mo=dd.getMonth();
   let monthsLeft=11-mo; if(monthsLeft<1) monthsLeft=12;
   const glabels=[]; for(let i=1;i<=monthsLeft;i++){ glabels.push(new Date(yr,mo+i,1).toISOString().slice(0,7)); }
@@ -342,7 +342,8 @@ async function tabOverview(){
       </div>
     </div>
 
-    <div class="section"><h2>Financial Score ${tip('คะแนนสุขภาพการเงินรวม เต็ม 5 จาก 6 ตัวชี้วัด — ยิ่งสูงยิ่งแข็งแรง')}</h2>
+    <div class="section"><h2>Financial Score ${tip('คะแนนสุขภาพการเงินรวม เต็ม 5 จาก 5 ตัวชี้วัด: กำไรขั้นต้น · วงจรเงินสด(DSO−DPO) · เงินสำรอง(Runway) · ระยะเก็บหนี้(DSO) · ระยะจ่ายหนี้(DPO) — ยิ่งสูงยิ่งแข็งแรง')}</h2>
+      <div class="muted" style="font-size:12px;margin-bottom:8px">💡 <b>Runway คำนวณจาก:</b> เงินสดในมือ ÷ อัตราเผาเงินสุทธิต่อเดือน (= ค่าใช้จ่ายเฉลี่ย − เงินเข้าเฉลี่ย จากกระแสเงินสดย้อนหลัง 3 เดือน) · ถ้าเงินเข้า ≥ เงินออก = "กระแสบวก" (เงินไม่มีวันหมด)</div>
       <div class="card card-${fs.status}" style="display:flex;gap:26px;flex-wrap:wrap;align-items:center;padding:22px">
         <div style="text-align:center;min-width:150px">
           <div style="font-size:46px;font-weight:700;font-family:var(--serif);color:var(--${fs.status})">${fs.score5}<span style="font-size:20px;color:var(--muted)"> / 5</span></div>
