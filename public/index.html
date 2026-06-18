@@ -184,7 +184,6 @@ const TABS = [
   {id:'aging', label:'อายุหนี้ (AR/AP)', adv:false},
   {id:'cost', label:'ต้นทุน & ค่าสี', adv:false},
   {id:'pnl', label:'📊 งบกำไรขาดทุน', adv:false},
-  {id:'paint', label:'วิเคราะห์ค่าสี', adv:false},
   {id:'bom', label:'BOM / ตั้งราคา', adv:false},
   {id:'production', label:'การผลิต', adv:false},
   {id:'payroll', label:'เงินเดือน', adv:false},
@@ -691,7 +690,7 @@ async function tabCost(){
         ${card('ค่าสีต่อบาน','เฉลี่ยต่อบานประตู — จับงานที่ผิดปกติ', baht(p.paint_per_door_satang),'', null)}
         ${card('แนวโน้ม','ทิศทางค่าสีรายเดือน', p.trend_direction==='up'?'⬆ เพิ่มขึ้น':p.trend_direction==='down'?'⬇ ลดลง':'➡ คงที่','', p.status)}
       </div>
-      <div class="muted" style="margin-top:12px;font-size:13px">📊 ดูแนวโน้มค่าสีรายเดือน + เปรียบเทียบช่วงเวลา (YoY) ได้ที่แท็บ <b>"วิเคราะห์ค่าสี"</b></div>
+      <div class="muted" style="margin-top:12px;font-size:13px">💡 ค่าสี/วัสดุบันทึกในชีต expenses (category=paint/wood/hardware) — ดูสัดส่วนต้นทุนได้ที่ตารางด้านบนและแท็บงบกำไรขาดทุน</div>
     </div>
     <div class="section"><h2>ค่าใช้จ่ายต่อยอดขาย (รายหมวด)</h2>
       <div class="card"><table><thead><tr><th>หมวด</th><th>ยอด</th><th>% ยอดขาย</th></tr></thead><tbody>
