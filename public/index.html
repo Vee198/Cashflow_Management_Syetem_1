@@ -831,7 +831,7 @@ async function tabPaintAnalysis(){
   const active=Object.entries(f).filter(([k,v])=>v);
   const fParts=active.map(([k,v])=>k+'='+encodeURIComponent(v));
   const dFull=await api('/paint-analysis'+(fParts.length?('?'+fParts.join('&')):''));   // เต็มช่วง (ปุ่มปี + ตัวเปรียบเทียบ)
-  if(!dFull.count && !active.length){ setMain('<div class="section"><h2>วิเคราะห์ค่าสี</h2><div class="card"><span class="muted">ยังไม่มีข้อมูลการซื้อสี/วัตถุดิบ — อัปโหลดชีต material_purchases ผ่านแท็บนำเข้าข้อมูล (ใช้ ETL etl_dataset_to_template.py)</span></div></div>'); return; }
+  if(!dFull.count && !active.length){ setMain('<div class="section"><h2>วิเคราะห์ค่าสี/วัสดุ</h2><div class="card"><span class="muted">ยังไม่มีข้อมูลค่าสี/วัสดุ — บันทึกในชีต <b>expenses</b> โดยเลือก category เป็น paint / wood / hardware / labor แล้วอัปโหลด</span></div></div>'); return; }
   const pf=state.paintFrom, pt=state.paintTo;
   let d=dFull;
   if(pf&&pt){ const pp=[...fParts,'from='+pf,'to='+pt]; d=await api('/paint-analysis?'+pp.join('&')); }   // กรองช่วงวันที่เฉพาะแท็บนี้
@@ -864,9 +864,9 @@ async function tabPaintAnalysis(){
       ${filterBar}
       <div class="grid cards">
         ${card(active.length?'ยอดซื้อ (กรองแล้ว)':'ยอดซื้อทั้งหมด','รวมภาษี', baht(d.total_satang), d.count+' รายการ', null)}
-        ${card('ค่าสี (paint)','', baht(d.paint_total_satang), pct(pctOf(d.paint_total_satang))+' ของยอด', null)}
-        ${card('ร้านที่ซื้อบ่อยสุด','จำนวนครั้งมากสุด', d.top_vendor_by_count?d.top_vendor_by_count.name:'-', d.top_vendor_by_count?(d.top_vendor_by_count.count+' ครั้ง · '+baht(d.top_vendor_by_count.satang)):'', null)}
-        ${card('แบรนด์หลัก','ซื้อบ่อยสุด', d.top_brand_by_count?d.top_brand_by_count.name:'-', d.top_brand_by_count?(d.top_brand_by_count.count+' ครั้ง · '+baht(d.top_brand_by_count.satang)):'', null)}
+        ${card('ค่าสี (paint)','', baht(d.paint_total_satang), pct(pctOf(d.paint_total_satang))+' ของต้นทุนวัสดุ', null)}
+        ${card('หมวดที่จ่ายมากสุด','ยอดรวมสูงสุด', d.by_type&&d.by_type[0]?d.by_type[0].name:'-', d.by_type&&d.by_type[0]?baht(d.by_type[0].satang):'', null)}
+        ${card('จำนวนรายการ','รายการค่าสี/วัสดุทั้งหมด', d.count+' รายการ', '', null)}
       </div>
     </div>
     <div class="section"><h2>แนวโน้มการซื้อรายเดือน</h2><div class="chartbox"><canvas id="paintTrend"></canvas></div></div>
@@ -887,16 +887,16 @@ async function tabPaintAnalysis(){
         <div class="chartbox" style="margin-top:8px"><canvas id="paintCompare"></canvas></div>
       </div>
     </div>
-    <div class="section"><h2>แยกตามร้านค้า / แบรนด์ / ชนิดสี ${tip('คลิกแถวเพื่อกรอง')}</h2>
-      <div class="row">${tbl(d.by_vendor,'vendor','ร้านค้า')}${tbl(d.by_brand,'brand','แบรนด์')}</div>
-      <div class="row" style="margin-top:14px">${tbl(d.by_type,'item_type','ชนิดสี')}<div class="chartbox" style="flex:1;min-width:280px"><canvas id="paintBrand"></canvas></div></div>
+    <div class="section"><h2>แยกตามหมวดต้นทุนวัสดุ ${tip('ค่าสี/ไม้/ฮาร์ดแวร์/ค่าแรง — คลิกแถวหรือชิ้นกราฟเพื่อกรองทั้งหน้า')}</h2>
+      <div class="row">${tbl(d.by_type,'item_type','หมวด')}<div class="chartbox" style="flex:1;min-width:280px"><canvas id="paintBrand"></canvas></div></div>
+      ${(d.by_vendor&&d.by_vendor.filter(x=>x.name!=='(ไม่ระบุ)').length)?`<div class="row" style="margin-top:14px">${tbl(d.by_vendor,'vendor','ร้านค้า (ถ้าระบุในหมายเหตุ)')}</div>`:''}
     </div>
   `);
   mkChart('paintTrend',{type:'bar',data:{labels:d.monthly.map(x=>x.month),datasets:[
     {label:'ค่าสี',data:d.monthly.map(x=>x.paint/100),backgroundColor:'#d4694c'},
     {label:'วัตถุดิบอื่น',data:d.monthly.map(x=>x.other/100),backgroundColor:'#9a6a43'}
   ]},options:chartOpts('ยอดซื้อรายเดือน (ค่าสี vs วัตถุดิบอื่น)')});
-  mkChart('paintBrand',{type:'doughnut',data:{labels:d.by_brand.slice(0,6).map(x=>x.name),datasets:[{data:d.by_brand.slice(0,6).map(x=>x.satang/100),backgroundColor:['#5a9d77','#9a6a43','#d4694c','#c9aa63','#7cb295','#b0a48f']}]},options:{...chartOpts('สัดส่วนยอดซื้อตามแบรนด์ (คลิกเพื่อกรอง)'),onClick:(e,els,ch)=>{ if(els.length){ setPaintFilter('brand', ch.data.labels[els[0].index]); } }}});
+  mkChart('paintBrand',{type:'doughnut',data:{labels:d.by_type.slice(0,6).map(x=>x.name),datasets:[{data:d.by_type.slice(0,6).map(x=>x.satang/100),backgroundColor:['#d4694c','#9a6a43','#c9aa63','#5a9d77','#7cb295','#b0a48f']}]},options:{...chartOpts('สัดส่วนต้นทุนวัสดุตามหมวด (คลิกเพื่อกรอง)'),onClick:(e,els,ch)=>{ if(els.length){ setPaintFilter('item_type', ch.data.labels[els[0].index]); } }}});
   // ค่าเริ่มต้นตัวเปรียบเทียบ: ปีแรก vs ปีล่าสุด (เดือนเดียวกัน สูงสุด 3 เดือนแรก)
   if(months.length){
     const n=months.length; let aF=months[0],aT=months[Math.min(2,n-1)],bF=months[Math.max(0,n-3)],bT=months[n-1];

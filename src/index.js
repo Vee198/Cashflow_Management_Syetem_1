@@ -221,7 +221,16 @@ app.get('/api/dashboard', async (c) => {
 // ---------- PAINT / MATERIAL COST ANALYSIS (วิเคราะห์ค่าสี) ----------
 app.get('/api/paint-analysis', async (c) => {
   try {
-    const all = await repo.getMaterialPurchases(c.env.DB);
+    // ── โมเดลใหม่: ค่าสี/วัสดุ มาจากชีต expenses (หมวด paint/wood/hardware/labor) ──
+    //    + รวม legacy material_purchases (ถ้ายังมีข้อมูลเก่า) เพื่อความเข้ากันได้
+    const MAT = { paint: 'ค่าสี', wood: 'ค่าไม้', hardware: 'ฮาร์ดแวร์/วัตถุดิบ', labor: 'ค่าแรงผลิต' };
+    const exps = await repo.getExpenses(c.env.DB);
+    const mapped = exps.filter((e) => MAT[e.category]).map((e) => ({
+      vendor: e.vendor || null, brand: null, item_type: MAT[e.category],
+      category: e.category, qty: 0, total_incl_vat_satang: e.amount_satang || 0, purchase_date: e.spent_at,
+    }));
+    const mats = await repo.getMaterialPurchases(c.env.DB);
+    const all = [...mapped, ...mats];
     const norm = (s) => (s || '').toString().trim();
     const fv = c.req.query('vendor'), fb = c.req.query('brand'), ft = c.req.query('item_type');
     const match = (val, f) => f === '(ไม่ระบุ)' ? !norm(val) : norm(val) === f;
