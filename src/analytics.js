@@ -677,7 +677,8 @@ export function expCogsType(e) {
 
 // งบกำไรขาดทุนรายเดือน (แท็บ P&L) — รายได้จาก jobs(quoted, started_at); ต้นทุน/ค่าใช้จ่ายจาก COGS&Expense(spent_at)
 // COGS แยก DM/DL/Overhead ตาม cogs_type · ค่าใช้จ่ายดำเนินงาน (opex) แยกตาม category
-export function pnlMonthly(jobs, expenses) {
+// + เงินเดือนพนักงาน (จากชีต employees): department=production → Direct Labor(COGS), อื่นๆ → Admin Salary(OpEx)
+export function pnlMonthly(jobs, expenses, employees) {
   const m = {};
   const ens = (k) => { if (!m[k]) m[k] = { revenue: 0, cogs: { direct_material: 0, direct_labor: 0, overhead: 0 }, opex: {} }; return m[k]; };
   for (const j of jobs) { const k = ym(j.started_at); if (k) ens(k).revenue += j.quoted_price_satang || 0; }
@@ -685,6 +686,11 @@ export function pnlMonthly(jobs, expenses) {
     const k = ym(e.spent_at); if (!k) continue; const o = ens(k); const amt = e.amount_satang || 0;
     if (expIsCOGS(e)) o.cogs[expCogsType(e)] += amt;
     else { const c = e.category || 'other'; o.opex[c] = (o.opex[c] || 0) + amt; }
+  }
+  const sal = employeeSalary(employees);
+  if (sal.per_month > 0) for (const k of Object.keys(m)) {
+    if (sal.cogs) m[k].cogs.direct_labor += sal.cogs;                     // ฝ่ายผลิต → Direct Labor (COGS)
+    if (sal.oh) m[k].opex.salary_admin = (m[k].opex.salary_admin || 0) + sal.oh;  // อื่นๆ → Admin Salary (OpEx)
   }
   return Object.keys(m).sort().map((k) => {
     const o = m[k];

@@ -564,7 +564,7 @@ async function tabAging(){
 }
 
 // ── งบกำไรขาดทุน (P&L) — เลือก 2 งวด (multi-เดือน) + vertical/horizontal + พิมพ์/CSV ──
-const PNL_CATLBL={paint:'ค่าสี',wood:'ค่าไม้',hardware:'ฮาร์ดแวร์/วัตถุดิบ',labor:'ค่าแรงผลิต',salary:'เงินเดือน (ฝ่ายผลิต)',salary_oh:'เงินเดือน (สนง./บริหาร)',rent:'ค่าเช่า',utility:'ค่าน้ำ-ไฟ',marketing:'การตลาด',ads:'โฆษณา (Ads)',transport:'ค่าขนส่ง',overhead:'โสหุ้ย',other:'อื่นๆ'};
+const PNL_CATLBL={paint:'ค่าสี',wood:'ค่าไม้',hardware:'ฮาร์ดแวร์/วัตถุดิบ',labor:'ค่าแรงผลิต',salary:'เงินเดือน',salary_admin:'เงินเดือน (Admin)',rent:'ค่าเช่า',utility:'ค่าน้ำ-ไฟ',marketing:'การตลาด',ads:'โฆษณา (Ads)',transport:'ค่าขนส่ง',overhead:'โสหุ้ย',other:'อื่นๆ'};
 const PNL_COGS=['paint','wood','hardware','labor','salary'];
 const PNL_OH=['salary_oh','rent','utility','marketing','ads','transport','overhead','other'];
 function pnlRangeAgg(monthly,from,to){
@@ -681,11 +681,11 @@ async function tabCost(){
         ${card('ต้นทุนขาย (COGS)','วัตถุดิบ+ค่าแรง+โสหุ้ย', baht(cg.cogs_satang),'', null)}
         ${card('กำไรขั้นต้น','', baht(cg.gross_profit_satang), pct(cg.gross_margin_pct), cg.gross_margin_pct>=30?'green':cg.gross_margin_pct>=15?'yellow':'red')}
       </div>
-      <div class="card" style="margin-top:14px"><h3>ต้นทุนแยกหมวด (จากชีต order: ค่าไม้/สี/แรง/ส่ง) — ต้นทุนรวม ${baht(c.total_satang)}</h3>
+      <div class="card" style="margin-top:14px"><h3>ต้นทุนขาย (COGS) แยกหมวด — จากชีต COGS&Expense (cost_class=COGS) — รวม ${baht(c.total_satang)}</h3>
         <table><thead><tr><th>หมวด</th><th>ยอด</th><th>%</th></tr></thead><tbody>
-        ${c.breakdown&&c.breakdown.length?c.breakdown.map(x=>`<tr><td>${x.name}</td><td>${baht(x.satang)}</td><td>${pct(c.total_satang?Math.round(x.satang/c.total_satang*1000)/10:0)}</td></tr>`).join(''):'<tr><td colspan=3 class="muted">ยังไม่มีต้นทุนในชีต order — กรอกคอลัมน์ ค่าไม้/ค่าสี/ค่าแรง/ค่าส่ง (J-M) ในชีต order</td></tr>'}
+        ${c.breakdown&&c.breakdown.length?c.breakdown.map(x=>`<tr><td>${x.name}</td><td>${baht(x.satang)}</td><td>${pct(c.total_satang?Math.round(x.satang/c.total_satang*1000)/10:0)}</td></tr>`).join(''):'<tr><td colspan=3 class="muted">ยังไม่มีต้นทุน COGS — ในชีต COGS&Expense ตั้ง cost_class=COGS แล้วเลือก cogs_type (DM/DL/Overhead)</td></tr>'}
         </tbody></table>
-        <div class="muted" style="font-size:12px;margin-top:8px">* นี่คือ <b>ต้นทุนต่อออเดอร์ (job costing)</b> สำหรับดูกำไร/margin รายออเดอร์ — ส่วนกำไรสุทธิ (P&L) ในแท็บภาพรวมใช้ค่าใช้จ่ายจริงจากชีต expenses</div>
+        <div class="muted" style="font-size:12px;margin-top:8px">* COGS = แถวที่ตั้ง cost_class=COGS ในชีต COGS&Expense (แยก Direct Material / Direct Labor / Overhead) + เงินเดือนฝ่ายผลิตจากชีต employees</div>
       </div>
     </div>
     <div class="section"><h2>🎨 วิเคราะห์ต้นทุนค่าสี ${tip('โจทย์ที่เจ้าของห่วงว่า "เงินจมกับค่าสี"')}</h2>

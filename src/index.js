@@ -182,6 +182,14 @@ app.get('/api/dashboard', async (c) => {
     let mpAll = 0, mpPaint = 0;
     for (const p of purF) { mpAll += p.total_incl_vat_satang || 0; if (p.category === 'paint') mpPaint += p.total_incl_vat_satang || 0; }
     cogsDM += mpAll; paintCost += mpPaint;                                  // material_purchases (legacy) = วัตถุดิบทางตรง
+    // เงินเดือนพนักงาน (จากชีต employees) × จำนวนเดือนในช่วง — ฝ่ายผลิต→Direct Labor(COGS), อื่นๆ→Admin Salary(OpEx)
+    const monthsSet = new Set();
+    for (const j of jobF) { const k = (j.started_at || '').slice(0, 7); if (k) monthsSet.add(k); }
+    for (const e of expF) { const k = (e.spent_at || '').slice(0, 7); if (k) monthsSet.add(k); }
+    const monthsCount = monthsSet.size || 1;
+    const sal = A.employeeSalary(employees);
+    cogsDL += sal.cogs * monthsCount;
+    if (sal.oh) { opexByCat.salary_admin = (opexByCat.salary_admin || 0) + sal.oh * monthsCount; opexTotal += sal.oh * monthsCount; }
     const prodCost = cogsDM + cogsDL + cogsMOH;                             // COGS รวม
     const ohTotal = opexTotal;                                             // ค่าใช้จ่ายดำเนินงานรวม
     const ps = A.profitByProductionType(jobF);
@@ -192,7 +200,7 @@ app.get('/api/dashboard', async (c) => {
       { name: 'ค่าแรงทางตรง (Direct Labor)', satang: cogsDL },
       { name: 'โสหุ้ยการผลิต (Overhead)', satang: cogsMOH },
     ].filter((x) => x.satang > 0).sort((a, b) => b.satang - a.satang);
-    const OH_LBL = { rent: 'ค่าเช่า', utility: 'ค่าน้ำ-ไฟ', marketing: 'การตลาด', ads: 'โฆษณา (Ads)', transport: 'ค่าขนส่ง', salary: 'เงินเดือน', labor: 'ค่าแรง', paint: 'ค่าสี', wood: 'ค่าไม้', hardware: 'ฮาร์ดแวร์', overhead: 'โสหุ้ย', other: 'อื่นๆ' };
+    const OH_LBL = { salary_admin: 'เงินเดือน (Admin)', rent: 'ค่าเช่า', utility: 'ค่าน้ำ-ไฟ', marketing: 'การตลาด', ads: 'โฆษณา (Ads)', transport: 'ค่าขนส่ง', salary: 'เงินเดือน', labor: 'ค่าแรง', paint: 'ค่าสี', wood: 'ค่าไม้', hardware: 'ฮาร์ดแวร์', overhead: 'โสหุ้ย', other: 'อื่นๆ' };
     const oh_breakdown = Object.entries(opexByCat).map(([cc, s]) => ({ name: OH_LBL[cc] || cc, satang: s })).filter((x) => x.satang > 0).sort((a, b) => b.satang - a.satang);
     return ok(c, {
       as_of: asOf, from: from || null, to: to || null,
@@ -251,8 +259,8 @@ app.get('/api/paint-analysis', async (c) => {
 // ---------- งบกำไรขาดทุนรายเดือน (P&L) ----------
 app.get('/api/pnl', async (c) => {
   try {
-    const [jobs, expenses] = await Promise.all([repo.getJobs(c.env.DB), repo.getExpenses(c.env.DB)]);
-    return ok(c, { monthly: A.pnlMonthly(jobs, expenses) });
+    const [jobs, expenses, employees] = await Promise.all([repo.getJobs(c.env.DB), repo.getExpenses(c.env.DB), repo.getEmployees(c.env.DB)]);
+    return ok(c, { monthly: A.pnlMonthly(jobs, expenses, employees) });
   } catch (e) { return err(c, e, 500); }
 });
 
@@ -288,15 +296,17 @@ app.get('/api/aging', async (c) => {
 app.get('/api/cost', async (c) => {
   try {
     const db = c.env.DB;
-    const [jobCosts, jobs, expenses] = await Promise.all([repo.getJobCosts(db), repo.getJobs(db), repo.getExpenses(db)]);
+    const [jobCosts, jobs, expenses, employees] = await Promise.all([repo.getJobCosts(db), repo.getJobs(db), repo.getExpenses(db), repo.getEmployees(db)]);
     // COGS + ค่าสี จากชีต COGS&Expense (cost_class/category) — รายได้จาก jobs(quoted)
     let cogsDM = 0, cogsDL = 0, cogsMOH = 0, paint = 0, revenue = 0, doors = 0;
     for (const j of jobs) { revenue += j.quoted_price_satang || 0; doors += j.quantity || j.qty_ordered || 0; }
+    const monthsSet = new Set();
     for (const e of expenses) {
-      const amt = e.amount_satang || 0;
+      const amt = e.amount_satang || 0; const mk = (e.spent_at || '').slice(0, 7); if (mk) monthsSet.add(mk);
       if (e.category === 'paint') paint += amt;
       if (A.expIsCOGS(e)) { const t = A.expCogsType(e); if (t === 'direct_material') cogsDM += amt; else if (t === 'direct_labor') cogsDL += amt; else cogsMOH += amt; }
     }
+    const sal = A.employeeSalary(employees); cogsDL += sal.cogs * (monthsSet.size || 1);   // เงินเดือนฝ่ายผลิต → Direct Labor
     const cogsTotal = cogsDM + cogsDL + cogsMOH;
     const breakdown = [
       { name: 'วัตถุดิบทางตรง (Direct Material)', satang: cogsDM },
