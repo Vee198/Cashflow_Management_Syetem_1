@@ -1026,6 +1026,18 @@ async function importExcel(file){
     const buf=await file.arrayBuffer();
     const wb=XLSX.read(buf,{type:'array',cellDates:true});
     const source='excel_'+(file.name||'upload').replace(/[^a-zA-Z0-9_.-]/g,'_'); // source ตามชื่อไฟล์ → อัปไฟล์เดิมซ้ำ = upsert ไม่เบิ้ล
+    // ── กันซ้ำ: เตือนถ้าเคยอัปโหลดกลุ่มข้อมูลเดียวกันด้วย "ชื่อไฟล์อื่น" (source ต่าง = ระบบนับเป็นคนละชุด → เบิ้ล) ──
+    try{
+      const sheetsHere=wb.SheetNames.filter(sn=>ENTITIES.includes(sn));
+      const batches=await api('/import/batches');
+      const ENT_TH={order:'ออเดอร์',expenses:'รายจ่าย',cash_transactions:'เงินสด',employees:'พนักงาน',material_purchases:'ค่าสี/วัตถุดิบ'};
+      const conflicts=[...new Set((batches||[]).filter(b=>sheetsHere.includes(b.entity)&&b.source!==source).map(b=>b.entity))];
+      if(conflicts.length){
+        const names=conflicts.map(e=>ENT_TH[e]||e).join(', ');
+        const go=confirm('⚠ เคยอัปโหลดข้อมูลกลุ่มนี้ ('+names+') จาก "ไฟล์ชื่ออื่น" มาก่อน\n\nถ้าอัปไฟล์ชื่อใหม่ ระบบจะนับเป็นคนละชุด → ข้อมูลอาจซ้ำ (เบิ้ล)\n\n✅ แนะนำ: ใช้ "ชื่อไฟล์เดิม" ระบบจะทับของเก่าให้ ไม่เบิ้ล\n\nกด OK เพื่อนำเข้าต่อ (รับความเสี่ยงซ้ำ) / Cancel เพื่อยกเลิก');
+        if(!go){ msg.innerHTML='ยกเลิกการนำเข้า — เปลี่ยนกลับเป็น <b>ชื่อไฟล์เดิม</b> แล้วอัปใหม่ (ระบบจะทับ ไม่เบิ้ล)<br>หรือถ้าต้องการล้างของซ้ำก่อน ดูไฟล์ clear_imported.sql / clear_material_dupes.sql'; return; }
+      }
+    }catch(e){}
     const total={inserted:0,updated:0,skipped:0,sheets:0,errors:[]};
     for(const sn of wb.SheetNames){            // ลำดับชีตในไฟล์ = ลำดับ dependency ที่ถูกต้องอยู่แล้ว
       if(!ENTITIES.includes(sn)) continue;
